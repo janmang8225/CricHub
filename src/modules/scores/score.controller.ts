@@ -9,7 +9,11 @@ import {
   setOpenersService,
   setNextBatsmanService,
   setBowlerService,
-  updateStrikeService
+  updateStrikeService,
+  completeOverManuallyService,
+  declareInningsService,
+  endInningsManuallyService,
+  getMilestonesService
 } from "./score.service.js";
 
 export async function initScores(req: Request, res: Response, next: NextFunction) {
@@ -176,6 +180,86 @@ export async function startMatch(req: Request, res: Response, next: NextFunction
 
     await startMatchService(matchId, tossWinnerTeamId, tossDecision);
     res.json({ message: "Match started" });
+  } catch (e) {
+    next(e);
+  }
+}
+
+
+// change1
+export async function completeOverManually(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const matchId = req.params.id;
+    const over = Number(req.params.over);
+
+    if (!matchId || isNaN(over)) {
+      return res.status(400).json({ message: "Invalid input" });
+    }
+
+    await completeOverManuallyService(matchId, over);
+    res.json({ message: "Over completed" });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function declareInnings(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const matchId = req.params.id;
+
+    if (!matchId) {
+      return res.status(400).json({ message: "matchId required" });
+    }
+
+    await declareInningsService(matchId);
+    res.json({ message: "Innings declared" });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function endInningsManually(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const matchId = req.params.id;
+    const { reason } = req.body; // TIME_LIMIT, DECLARATION, etc.
+
+    if (!matchId || !reason) {
+      return res.status(400).json({ message: "matchId and reason required" });
+    }
+
+    await endInningsManuallyService(matchId, reason);
+    res.json({ message: "Innings ended" });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function getMilestones(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const matchId = req.params.id;
+
+    if (!matchId || typeof matchId !== "string") {
+      return res.status(400).json({ message: "Invalid matchId" });
+    }
+
+    const milestones = await getMilestonesService(matchId);
+    res.json(milestones);
   } catch (e) {
     next(e);
   }

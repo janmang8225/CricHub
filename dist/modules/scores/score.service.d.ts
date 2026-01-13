@@ -22,4 +22,8 @@ export declare function setOpenersService(matchId: string, strikerId: string, no
 export declare function setNextBatsmanService(matchId: string, newBatsmanId: string): Promise<void>;
 export declare function setBowlerService(matchId: string, over: number, bowlerId: string): Promise<void>;
 export declare function updateStrikeService(matchId: string, strikerId: string, nonStrikerId: string): Promise<any>;
+export declare function completeOverManuallyService(matchId: string, over: number): Promise<void>;
+export declare function declareInningsService(matchId: string): Promise<void>;
+export declare function endInningsManuallyService(matchId: string, reason: string): Promise<void>;
+export declare function getMilestonesService(matchId: string): Promise<any[]>;
 //# sourceMappingURL=score.service.d.ts.map

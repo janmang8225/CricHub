@@ -1,6 +1,6 @@
 // player.controller.ts
 import type { Request, Response, NextFunction } from "express";
-import { createPlayerService, getPlayersService } from "./player.service.js";
+import { createPlayerService, getPlayersService, updatePlayerRoleService } from "./player.service.js";
 
 export async function createPlayer(req: Request, res: Response, next: NextFunction) {
   try {
@@ -15,6 +15,29 @@ export async function getPlayers(req: Request, res: Response, next: NextFunction
   try {
     const players = await getPlayersService();
     res.json(players);
+  } catch (e) {
+    next(e);
+  }
+}
+
+
+// change1
+export async function updatePlayerRole(req: Request, res: Response, next: NextFunction) {
+  try {
+    const playerId = req.params.id;
+    const { isBatsman, isBowler, isWicketKeeper } = req.body;
+    
+    // Type validation
+    if (typeof isBatsman !== 'boolean' || typeof isBowler !== 'boolean' || typeof isWicketKeeper !== 'boolean') {
+      return res.status(400).json({ message: "Invalid role types" });
+    }
+
+    if (!playerId) {
+      return res.status(400).json({ message: "Player ID is required" });
+    }
+    
+    const player = await updatePlayerRoleService(playerId, isBatsman, isBowler, isWicketKeeper);
+    res.json(player);
   } catch (e) {
     next(e);
   }

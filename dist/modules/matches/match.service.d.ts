@@ -8,5 +8,17 @@ export declare function unassignScorerService(matchId: string, userId: string): 
     message: string;
 }>;
 export declare function startMatchService(matchId: string): Promise<void>;
-export declare function completeMatchService(matchId: string): Promise<void>;
+export declare function completeMatchService(matchId: string): Promise<{
+    result: string;
+    winnerTeamId: any;
+    resultMethod: string;
+    resultMargin: number;
+}>;
+export declare function setPlayingXIService(matchId: string, teamId: string, players: Array<{
+    playerId: string;
+    isCaptain: boolean;
+    isViceCaptain: boolean;
+    isWicketKeeper: boolean;
+    isSubstitute: boolean;
+}>): Promise<void>;
 //# sourceMappingURL=match.service.d.ts.map

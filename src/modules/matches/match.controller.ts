@@ -1,6 +1,6 @@
 // match.controller.ts
 import type { Request, Response, NextFunction } from "express";
-import { createMatchService, listMatchesService, getMatchService } from "./match.service.js";
+import { createMatchService, listMatchesService, getMatchService, setPlayingXIService } from "./match.service.js";
 import {
   assignScorerService,
   unassignScorerService,
@@ -55,9 +55,12 @@ export async function unassignScorer(
 
 export async function createMatch(req: Request, res: Response, next: NextFunction) {
   try {
-    const { teamAId, teamBId, startTime } = req.body;
+    const { teamAId, teamBId, startTime, maxOvers } = req.body;
     const user = (req as any).user;
-    const match = await createMatchService(teamAId, teamBId, startTime, user.userId);
+    if (!maxOvers || maxOvers <= 0) {
+      return res.status(400).json({ message: "Valid maxOvers is required" });
+    }
+    const match = await createMatchService(teamAId, teamBId, startTime, maxOvers, user.userId);
     res.status(201).json(match);
   } catch (e) {
     next(e);
@@ -132,5 +135,37 @@ export async function completeMatchController(req: Request, res: Response, next:
     res.json({ message: "Match completed" });
   } catch (err) {
     next(err);
+  }
+}
+
+// change1
+export async function setPlayingXI(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.params.id) {
+      return res.status(400).json({ error: 'match id required' });
+    }
+    const matchId = req.params.id;
+    const { teamId, players } = req.body;
+    
+    // Type validation
+    if (!teamId || !Array.isArray(players) || players.length !== 11) {
+      return res.status(400).json({ message: "teamId and 11 players required" });
+    }
+    
+    // Validate each player object
+    for (const p of players) {
+      if (!p.playerId || typeof p.playerId !== 'string') {
+        return res.status(400).json({ message: "Invalid player data" });
+      }
+      if (typeof p.isCaptain !== 'boolean' || typeof p.isViceCaptain !== 'boolean' || 
+          typeof p.isWicketKeeper !== 'boolean' || typeof p.isSubstitute !== 'boolean') {
+        return res.status(400).json({ message: "Invalid player role flags" });
+      }
+    }
+    
+    await setPlayingXIService(matchId, teamId, players);
+    res.status(201).json({ message: "Playing XI set" });
+  } catch (e) {
+    next(e);
   }
 }

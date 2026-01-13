@@ -1,4 +1,4 @@
-import { createMatchService, listMatchesService, getMatchService } from "./match.service.js";
+import { createMatchService, listMatchesService, getMatchService, setPlayingXIService } from "./match.service.js";
 import { assignScorerService, unassignScorerService, startMatchService, completeMatchService, } from "./match.service.js";
 export async function assignScorer(req, res, next) {
     try {
@@ -103,6 +103,35 @@ export async function completeMatchController(req, res, next) {
     }
     catch (err) {
         next(err);
+    }
+}
+// change1
+export async function setPlayingXI(req, res, next) {
+    try {
+        if (!req.params.id) {
+            return res.status(400).json({ error: 'match id required' });
+        }
+        const matchId = req.params.id;
+        const { teamId, players } = req.body;
+        // Type validation
+        if (!teamId || !Array.isArray(players) || players.length !== 11) {
+            return res.status(400).json({ message: "teamId and 11 players required" });
+        }
+        // Validate each player object
+        for (const p of players) {
+            if (!p.playerId || typeof p.playerId !== 'string') {
+                return res.status(400).json({ message: "Invalid player data" });
+            }
+            if (typeof p.isCaptain !== 'boolean' || typeof p.isViceCaptain !== 'boolean' ||
+                typeof p.isWicketKeeper !== 'boolean' || typeof p.isSubstitute !== 'boolean') {
+                return res.status(400).json({ message: "Invalid player role flags" });
+            }
+        }
+        await setPlayingXIService(matchId, teamId, players);
+        res.status(201).json({ message: "Playing XI set" });
+    }
+    catch (e) {
+        next(e);
     }
 }
 //# sourceMappingURL=match.controller.js.map

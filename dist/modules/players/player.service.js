@@ -8,4 +8,15 @@ export async function getPlayersService() {
     const result = await db.query("SELECT * FROM players ORDER BY created_at DESC");
     return result.rows;
 }
+// change1
+export async function updatePlayerRoleService(playerId, isBatsman, isBowler, isWicketKeeper) {
+    const result = await db.query(`UPDATE players 
+     SET is_batsman = $1, is_bowler = $2, is_wicket_keeper = $3
+     WHERE id = $4
+     RETURNING *`, [isBatsman, isBowler, isWicketKeeper, playerId]);
+    if (result.rowCount === 0) {
+        throw new Error("Player not found");
+    }
+    return result.rows[0];
+}
 //# sourceMappingURL=player.service.js.map
