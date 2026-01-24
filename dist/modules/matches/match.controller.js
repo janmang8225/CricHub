@@ -30,9 +30,12 @@ export async function unassignScorer(req, res, next) {
 }
 export async function createMatch(req, res, next) {
     try {
-        const { teamAId, teamBId, startTime } = req.body;
+        const { teamAId, teamBId, startTime, maxOvers } = req.body;
         const user = req.user;
-        const match = await createMatchService(teamAId, teamBId, startTime, user.userId);
+        if (!maxOvers || maxOvers <= 0) {
+            return res.status(400).json({ message: "Valid maxOvers is required" });
+        }
+        const match = await createMatchService(teamAId, teamBId, startTime, maxOvers, user.userId);
         res.status(201).json(match);
     }
     catch (e) {

@@ -1,11 +1,11 @@
 // match.service.ts
 import db from "../../config/db.js";
-export async function createMatchService(teamAId, teamBId, startTime, createdBy) {
+export async function createMatchService(teamAId, teamBId, startTime, maxOvers, createdBy) {
     const result = await db.query(`
-    INSERT INTO matches (team_a_id, team_b_id, start_time, created_by)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO matches (team_a_id, team_b_id, start_time, max_overs, created_by)
+    VALUES ($1, $2, $3, $4, $5)
     RETURNING *
-    `, [teamAId, teamBId, startTime, createdBy]);
+    `, [teamAId, teamBId, startTime, maxOvers, createdBy]);
     return result.rows[0];
 }
 export async function listMatchesService(page, limit) {

@@ -31,9 +31,10 @@ export async function submitBallService(matchId, actor, ball) {
         const currentInnings = scoreRes.rows[0].innings;
         if (!currentInnings)
             throw new Error("Scores not initialized");
-        if (ball.innings !== currentInnings) {
-            throw new Error("Invalid innings");
-        }
+        ball.innings = currentInnings;
+        // if (ball.innings !== currentInnings) {
+        //   throw new Error("Invalid innings");
+        // }
         // change1: auto calculate
         // ============ AUTO-CALCULATE OVER AND BALL NUMBER ============
         const lastBallRes = await db.query(`SELECT over, ball, is_wide, is_no_ball
@@ -144,12 +145,12 @@ export async function submitBallService(matchId, actor, ball) {
         if (!ball.isWicket) {
             ball.dismissedPlayerId = null;
         }
-        ball.isWide = false;
-        ball.isNoBall = false;
-        ball.isBye = false;
-        ball.isLegBye = false;
-        ball.isPenalty = false;
-        ball.isFreeHit = false;
+        // ball.isWide = false
+        // ball.isNoBall = false
+        // ball.isBye = false
+        // ball.isLegBye = false
+        // ball.isPenalty = false
+        // ball.isFreeHit = false
         // --- PATCHES ---
         // for strike/non-strike id
         const stateRes = await db.query(`
@@ -665,16 +666,32 @@ export async function submitBallService(matchId, actor, ball) {
                 // Check if player just crossed milestone (current runs >= milestone, previous runs < milestone)
                 if (strikerRuns >= milestone) {
                     // Check if milestone already recorded
-                    const existingMilestone = await db.query(`SELECT 1 FROM player_milestones
+                    const existingMilestone = await db.query(`SELECT milestone_value FROM player_milestones
              WHERE match_id=$1 AND innings=$2 AND player_id=$3 
-               AND milestone_type='RUNS' AND milestone_value=$4`, [matchId, currentInnings, ball.strikerId, milestone]);
+               AND milestone_type='RUNS'
+             ORDER BY milestone_value DESC
+             LIMIT 1`, [matchId, currentInnings, ball.strikerId]);
                     if (existingMilestone.rowCount === 0) {
-                        // Check if they just reached it this ball (runs - runs_off_bat < milestone)
+                        // No milestone exists, check if they just reached it this ball
                         const previousRuns = strikerRuns - ball.runsOffBat;
                         if (previousRuns < milestone) {
                             await db.query(`INSERT INTO player_milestones 
                  (match_id, innings, player_id, milestone_type, milestone_value, achieved_over, achieved_ball)
                  VALUES ($1, $2, $3, 'RUNS', $4, $5, $6)`, [matchId, currentInnings, ball.strikerId, milestone, ball.over, ball.ball]);
+                        }
+                    }
+                    else {
+                        // Milestone exists, check if we need to update to higher milestone
+                        const currentMilestoneValue = existingMilestone.rows[0].milestone_value;
+                        const previousRuns = strikerRuns - ball.runsOffBat;
+                        // Only update if player just crossed this milestone and it's higher than existing
+                        if (previousRuns < milestone && milestone > currentMilestoneValue) {
+                            await db.query(`UPDATE player_milestones
+                 SET milestone_value = $1,
+                     achieved_over = $2,
+                     achieved_ball = $3
+                 WHERE match_id=$4 AND innings=$5 AND player_id=$6 
+                   AND milestone_type='RUNS'`, [milestone, ball.over, ball.ball, matchId, currentInnings, ball.strikerId]);
                         }
                     }
                 }
@@ -690,16 +707,32 @@ export async function submitBallService(matchId, actor, ball) {
                 bowlerStatsRes.rowCount > 0) {
                 const bowlerWickets = bowlerStatsRes.rows[0].wickets;
                 if (bowlerWickets >= milestone) {
-                    const existingMilestone = await db.query(`SELECT 1 FROM player_milestones
+                    const existingMilestone = await db.query(`SELECT milestone_value FROM player_milestones
              WHERE match_id=$1 AND innings=$2 AND player_id=$3 
-               AND milestone_type='WICKETS' AND milestone_value=$4`, [matchId, currentInnings, ball.bowlerId, milestone]);
+               AND milestone_type='WICKETS'
+             ORDER BY milestone_value DESC
+             LIMIT 1`, [matchId, currentInnings, ball.bowlerId]);
                     if (existingMilestone.rowCount === 0) {
-                        // Check if they just reached it (only if this ball was a wicket)
+                        // No milestone exists, check if they just reached it (only if this ball was a wicket)
                         const previousWickets = ball.isWicket ? bowlerWickets - 1 : bowlerWickets;
                         if (previousWickets < milestone && ball.isWicket) {
                             await db.query(`INSERT INTO player_milestones 
                  (match_id, innings, player_id, milestone_type, milestone_value, achieved_over, achieved_ball)
                  VALUES ($1, $2, $3, 'WICKETS', $4, $5, $6)`, [matchId, currentInnings, ball.bowlerId, milestone, ball.over, ball.ball]);
+                        }
+                    }
+                    else {
+                        // Milestone exists, check if we need to update to higher milestone
+                        const currentMilestoneValue = existingMilestone.rows[0].milestone_value;
+                        const previousWickets = ball.isWicket ? bowlerWickets - 1 : bowlerWickets;
+                        // Only update if bowler just crossed this milestone and it's higher than existing
+                        if (previousWickets < milestone && milestone > currentMilestoneValue && ball.isWicket) {
+                            await db.query(`UPDATE player_milestones
+                 SET milestone_value = $1,
+                     achieved_over = $2,
+                     achieved_ball = $3
+                 WHERE match_id=$4 AND innings=$5 AND player_id=$6 
+                   AND milestone_type='WICKETS'`, [milestone, ball.over, ball.ball, matchId, currentInnings, ball.bowlerId]);
                         }
                     }
                 }
@@ -716,16 +749,22 @@ export async function submitBallService(matchId, actor, ball) {
             if (last3BallsRes.rowCount === 3) {
                 const allWickets = last3BallsRes.rows.every(b => b.is_wicket === true);
                 if (allWickets) {
-                    // Check if hat-trick already recorded
+                    // Check if hat-trick already recorded for this player in this innings
+                    // const existingHatTrick = await db.query(
+                    //   `SELECT 1 FROM player_milestones
+                    //    WHERE match_id=$1 AND innings=$2 AND player_id=$3 
+                    //      AND milestone_type='HAT_TRICK'
+                    //      AND achieved_over=$4 AND achieved_ball=$5`,
+                    //   [matchId, currentInnings, ball.bowlerId, ball.over, ball.ball]
+                    // );
                     const existingHatTrick = await db.query(`SELECT 1 FROM player_milestones
              WHERE match_id=$1 AND innings=$2 AND player_id=$3 
-               AND milestone_type='HAT_TRICK'
-               AND achieved_over=$4 AND achieved_ball=$5`, [matchId, currentInnings, ball.bowlerId, ball.over, ball.ball]);
+               AND milestone_type='HAT_TRICK'`, [matchId, currentInnings, ball.bowlerId]);
                     if (existingHatTrick.rowCount === 0) {
                         await db.query(`INSERT INTO player_milestones 
                (match_id, innings, player_id, milestone_type, milestone_value, achieved_over, achieved_ball)
-               VALUES ($1, $2, $3, 'HAT_TRICK', NULL, $4, $5)`, [matchId, currentInnings, ball.bowlerId, ball.over, ball.ball]);
-                    }
+               VALUES ($1, $2, $3, 'HAT_TRICK', 3, $4, $5)`, [matchId, currentInnings, ball.bowlerId, ball.over, ball.ball]);
+                    } // changed: null -> 3
                 }
             }
         }
