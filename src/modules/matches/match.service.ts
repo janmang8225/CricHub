@@ -1,5 +1,6 @@
 // match.service.ts
 import db from "../../config/db.js";
+import { emitMatchComplete } from "../../websocket/websocket.emitters.js";
 
 export async function createMatchService(
   teamAId: string,
@@ -228,6 +229,7 @@ export async function completeMatchService(matchId: string) {
     );
 
     await db.query("COMMIT");
+    emitMatchComplete(matchId, result, winnerTeamId, resultMethod, resultMargin);
 
     return {
       result,

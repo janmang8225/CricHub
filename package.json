@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@types/cors": "^2.8.19",
+    "@types/node": "^25.0.10",
     "@types/ws": "^8.18.1",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
@@ -10,6 +11,8 @@
     "express-rate-limit": "^8.2.1",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.16.3",
+    "rate-limit-redis": "^4.3.1",
+    "redis": "^5.10.0",
     "ws": "^8.19.0"
   },
   "name": "crichub",

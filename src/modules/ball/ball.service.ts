@@ -1,4 +1,14 @@
 import db from "../../config/db.js";
+import {
+  emitBallAdded,
+  emitScoreUpdate,
+  emitWicket,
+  emitOverComplete,
+  emitInningsEnd,
+  emitMatchComplete,
+  emitMilestone,
+  emitPartnershipUpdate
+} from "../../websocket/websocket.emitters.js";
 
 export async function submitBallService(matchId: any, actor: any, ball: any) {
   await db.query("BEGIN");
@@ -896,6 +906,9 @@ export async function submitBallService(matchId: any, actor: any, ball: any) {
                  VALUES ($1, $2, $3, 'RUNS', $4, $5, $6)`,
                 [matchId, currentInnings, ball.strikerId, milestone, ball.over, ball.ball]
               );
+              // runs milestone emit
+              emitMilestone(matchId, ball.strikerId, 'RUNS', milestone, ball.over, ball.ball);
+              
             }
           } else {
             // Milestone exists, check if we need to update to higher milestone
@@ -913,6 +926,9 @@ export async function submitBallService(matchId: any, actor: any, ball: any) {
                    AND milestone_type='RUNS'`,
                 [milestone, ball.over, ball.ball, matchId, currentInnings, ball.strikerId]
               );
+              // runs milestone emit
+              emitMilestone(matchId, ball.strikerId, 'RUNS', milestone, ball.over, ball.ball);
+
             }
           }
         }
@@ -955,6 +971,9 @@ export async function submitBallService(matchId: any, actor: any, ball: any) {
                  VALUES ($1, $2, $3, 'WICKETS', $4, $5, $6)`,
                 [matchId, currentInnings, ball.bowlerId, milestone, ball.over, ball.ball]
               );
+              // wicket milestone emit
+              emitMilestone(matchId, ball.bowlerId, 'WICKETS', milestone, ball.over, ball.ball);
+
             }
           } else {
             // Milestone exists, check if we need to update to higher milestone
@@ -972,6 +991,9 @@ export async function submitBallService(matchId: any, actor: any, ball: any) {
                    AND milestone_type='WICKETS'`,
                 [milestone, ball.over, ball.ball, matchId, currentInnings, ball.bowlerId]
               );
+              // wicket milestone emit
+              emitMilestone(matchId, ball.bowlerId, 'WICKETS', milestone, ball.over, ball.ball);
+
             }
           }
         }
@@ -1016,6 +1038,9 @@ export async function submitBallService(matchId: any, actor: any, ball: any) {
                VALUES ($1, $2, $3, 'HAT_TRICK', 3, $4, $5)`,
               [matchId, currentInnings, ball.bowlerId, ball.over, ball.ball]
             );
+            // hat-trick milestone emit
+            emitMilestone(matchId, ball.bowlerId, 'HAT_TRICK', 3, ball.over, ball.ball);
+
           } // changed: null -> 3
         }
       }
@@ -1026,6 +1051,169 @@ export async function submitBallService(matchId: any, actor: any, ball: any) {
 
 
     await db.query("COMMIT");
+
+
+
+
+
+    // ============ WEBSOCKET EMISSIONS (AFTER SUCCESSFUL COMMIT) ============
+
+    // Emit ball added event
+    emitBallAdded(
+      matchId,
+      currentInnings,
+      ball.over,
+      ball.ball,
+      ball.runsOffBat,
+      ball.extraRuns,
+      ball.isWicket,
+      ball.boundary,
+      ball.isWide,
+      ball.isNoBall
+    );
+
+    // Get updated stats for WebSocket broadcast
+    const strikerStatsRes = await db.query(
+      `SELECT runs, balls, fours, sixes FROM match_batting_stats
+       WHERE match_id=$1 AND player_id=$2`,
+      [matchId, ball.strikerId]
+    );
+    const nonStrikerStatsRes = await db.query(
+      `SELECT runs, balls, fours, sixes FROM match_batting_stats
+       WHERE match_id=$1 AND player_id=$2`,
+      [matchId, ball.nonStrikerId]
+    );
+    const bowlerStatsRes = await db.query(
+      `SELECT balls, runs_conceded, wickets FROM match_bowling_stats
+       WHERE match_id=$1 AND player_id=$2`,
+      [matchId, ball.bowlerId]
+    );
+
+    const strikerStats = strikerStatsRes.rows[0];
+    const nonStrikerStats = nonStrikerStatsRes.rows[0];
+    const bowlerStats = bowlerStatsRes.rows[0];
+
+    // Emit score update
+    emitScoreUpdate(
+      matchId,
+      battingTeamId,
+      currentScore.runs,
+      currentScore.wickets,
+      oversDecimal,
+      {
+        id: ball.strikerId,
+        runs: strikerStats.runs,
+        balls: strikerStats.balls,
+        fours: strikerStats.fours,
+        sixes: strikerStats.sixes,
+      },
+      {
+        id: ball.nonStrikerId,
+        runs: nonStrikerStats.runs,
+        balls: nonStrikerStats.balls,
+        fours: nonStrikerStats.fours,
+        sixes: nonStrikerStats.sixes,
+      },
+      {
+        id: ball.bowlerId,
+        balls: bowlerStats.balls,
+        runsConceded: bowlerStats.runs_conceded,
+        wickets: bowlerStats.wickets,
+      }
+    );
+
+
+    // Emit wicket event if wicket fell
+    if (ball.isWicket) {
+      emitWicket(
+        matchId,
+        ball.wicket,
+        ball.dismissedPlayerId,
+        currentScore.wickets,
+        currentScore.runs,
+        ball.over,
+        ball.ball
+      );
+    }
+
+
+    // Emit over complete event if over just completed
+    const legalBallsInOverCheck = await db.query(
+      `SELECT COUNT(*) as legal_balls
+       FROM balls
+       WHERE match_id=$1 AND innings=$2 AND over=$3 
+         AND is_wide=false AND is_no_ball=false`,
+      [matchId, currentInnings, ball.over]
+    );
+
+
+
+    if (parseInt(legalBallsInOverCheck.rows[0].legal_balls) === 6) {
+      const overSummaryRes = await db.query(
+        `SELECT runs, wickets, extras FROM over_summary
+         WHERE match_id=$1 AND innings=$2 AND over=$3`,
+        [matchId, currentInnings, ball.over]
+      );
+      
+      // if ( (overSummaryRes.rowCount ?? 0) > 0 ) {
+      if (overSummaryRes.rowCount!==null && overSummaryRes.rowCount > 0) {
+        const summary = overSummaryRes.rows[0];
+        emitOverComplete(
+          matchId,
+          currentInnings,
+          ball.over,
+          summary.runs,
+          summary.wickets,
+          summary.extras
+        );
+      }
+    }
+
+    // Emit innings end event if innings ended
+    if (inningsEnded) {
+      emitInningsEnd(
+        matchId,
+        currentInnings,
+        inningsEndReason,
+        match.target_score
+      );
+    }
+
+    // Emit match complete event if match completed
+    if (matchCompleted && matchResult) {
+      emitMatchComplete(
+        matchId,
+        matchResult.result,
+        matchResult.winnerTeamId,
+        matchResult.resultMethod,
+        matchResult.resultMargin
+      );
+    }
+
+    // Emit partnership update (get current partnership)
+    const currentPartnershipRes = await db.query(
+      `SELECT runs, balls FROM partnerships
+       WHERE match_id=$1 AND innings=$2
+         AND ((batter1_id=$3 AND batter2_id=$4) OR (batter1_id=$4 AND batter2_id=$3))
+         AND end_over IS NULL`,
+      [matchId, currentInnings, ball.strikerId, ball.nonStrikerId]
+    );
+    
+    if (currentPartnershipRes.rowCount!=null && currentPartnershipRes.rowCount > 0 && !ball.isWicket) {
+      const partnership = currentPartnershipRes.rows[0];
+      emitPartnershipUpdate(
+        matchId,
+        ball.strikerId,
+        ball.nonStrikerId,
+        partnership.runs,
+        partnership.balls
+      );
+    }
+
+
+
+
+
     return {
       message: "Ball added",
       over: ball.over,

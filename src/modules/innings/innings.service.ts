@@ -1,5 +1,6 @@
 // innings.service.ts
 import db from "../../config/db.js";
+import { emitInningsSwitch } from "../../websocket/websocket.emitters.js";
 
 export async function switchInningsService(matchId: any, actor: any) {
   await db.query("BEGIN");
@@ -61,6 +62,9 @@ export async function switchInningsService(matchId: any, actor: any) {
     );
 
     await db.query("COMMIT");
+
+    emitInningsSwitch(matchId, 2);
+
   } catch (e) {
     await db.query("ROLLBACK");
     throw e;

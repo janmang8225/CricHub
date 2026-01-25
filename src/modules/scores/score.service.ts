@@ -1,5 +1,6 @@
 // score.service.ts
 import db from "../../config/db.js";
+import { emitBatsmanChange, emitBowlerChange } from "../../websocket/websocket.emitters.js";
 
 export async function initScoresService(matchId: string) {
   // match must exist
@@ -440,6 +441,9 @@ export async function setOpenersService(
     );
 
     await db.query("COMMIT");
+    emitBatsmanChange(matchId, strikerId, 'STRIKER');
+    emitBatsmanChange(matchId, nonStrikerId, 'NON_STRIKER');
+
   } catch (e) {
     await db.query("ROLLBACK");
     throw e;
@@ -530,6 +534,7 @@ export async function setNextBatsmanService(
     );
 
     await db.query("COMMIT");
+    emitBatsmanChange(matchId, newBatsmanId, 'STRIKER');
   } catch (e) {
     await db.query("ROLLBACK");
     throw e;
@@ -632,6 +637,8 @@ export async function setBowlerService(
     );
 
     await db.query("COMMIT");
+    emitBowlerChange(matchId, bowlerId, over);
+    
   } catch (e) {
     await db.query("ROLLBACK");
     throw e;
