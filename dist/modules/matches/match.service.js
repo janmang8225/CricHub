@@ -1,5 +1,6 @@
 // match.service.ts
 import db from "../../config/db.js";
+import { emitMatchComplete } from "../../websocket/websocket.emitters.js";
 export async function createMatchService(teamAId, teamBId, startTime, maxOvers, createdBy) {
     const result = await db.query(`
     INSERT INTO matches (team_a_id, team_b_id, start_time, max_overs, created_by)
@@ -8,20 +9,81 @@ export async function createMatchService(teamAId, teamBId, startTime, maxOvers, 
     `, [teamAId, teamBId, startTime, maxOvers, createdBy]);
     return result.rows[0];
 }
+// export async function listMatchesService(page: number, limit: number) {
+//   const offset = (page-1)*limit;
+//   const result = await db.query(
+//     `SELECT * FROM matches ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+//     [limit, offset]
+//   );
+//   return result.rows;
+// }
 export async function listMatchesService(page, limit) {
     const offset = (page - 1) * limit;
-    const result = await db.query(`SELECT * FROM matches ORDER BY created_at DESC LIMIT $1 OFFSET $2`, [limit, offset]);
+    // combined query = 3 joins
+    const result = await db.query(`SELECT 
+      m.*,
+      -- Team A details
+      ta.id as team_a_id,
+      ta.name as team_a_name,
+      s1.runs as team_a_runs,
+      s1.wickets as team_a_wickets,
+      s1.overs as team_a_overs,
+      -- Team B details
+      tb.id as team_b_id,
+      tb.name as team_b_name,
+      s2.runs as team_b_runs,
+      s2.wickets as team_b_wickets,
+      s2.overs as team_b_overs
+    FROM matches m
+    LEFT JOIN teams ta ON m.team_a_id = ta.id
+    LEFT JOIN teams tb ON m.team_b_id = tb.id
+    LEFT JOIN scores s1 ON m.id = s1.match_id AND s1.team_id = m.team_a_id
+    LEFT JOIN scores s2 ON m.id = s2.match_id AND s2.team_id = m.team_b_id
+    ORDER BY m.created_at DESC 
+    LIMIT $1 OFFSET $2`, [limit, offset]);
     return result.rows;
 }
+// export async function getMatchService(id: string) {
+//   const result = await db.query(
+//     `SELECT * FROM matches WHERE id = $1`,
+//     [id]
+//   );
+//   return result.rows[0];
+// }
 export async function getMatchService(id) {
-    const result = await db.query(`SELECT * FROM matches WHERE id = $1`, [id]);
+    const result = await db.query(`SELECT 
+      m.*,
+      -- Team A details
+      ta.id as team_a_id,
+      ta.name as team_a_name,
+      s1.runs as team_a_runs,
+      s1.wickets as team_a_wickets,
+      s1.overs as team_a_overs,
+      -- Team B details
+      tb.id as team_b_id,
+      tb.name as team_b_name,
+      s2.runs as team_b_runs,
+      s2.wickets as team_b_wickets,
+      s2.overs as team_b_overs
+    FROM matches m
+    LEFT JOIN teams ta ON m.team_a_id = ta.id
+    LEFT JOIN teams tb ON m.team_b_id = tb.id
+    LEFT JOIN scores s1 ON m.id = s1.match_id AND s1.team_id = m.team_a_id
+    LEFT JOIN scores s2 ON m.id = s2.match_id AND s2.team_id = m.team_b_id
+    WHERE m.id = $1`, [id]);
     return result.rows[0];
 }
-export async function assignScorerService(matchId, userId, assignedBy) {
+export async function assignScorerService(matchId, userId, assignedBy, actorRole, actorUserId) {
     // match exists
-    const match = await db.query("SELECT id FROM matches WHERE id=$1", [matchId]);
+    const match = await db.query("SELECT id, created_by FROM matches WHERE id=$1", [matchId]);
     if ((match.rowCount ?? 0) === 0) {
         throw new Error("Match not found");
+    }
+    // Ownership check for CREATOR role
+    if (actorRole === "CREATOR" && match.rows[0].created_by !== actorUserId) {
+        const err = new Error("You can only assign scorers to matches you created");
+        err.statusCode = 403;
+        throw err;
     }
     // user exists + role SCORER
     const user = await db.query("SELECT id, role FROM users WHERE id=$1", [userId]);
@@ -40,7 +102,18 @@ export async function assignScorerService(matchId, userId, assignedBy) {
     `, [matchId, userId, assignedBy]);
     return { message: "Scorer assigned" };
 }
-export async function unassignScorerService(matchId, userId) {
+export async function unassignScorerService(matchId, userId, actorRole, actorUserId) {
+    // Check match exists and get creator
+    const match = await db.query("SELECT id, created_by FROM matches WHERE id=$1", [matchId]);
+    if ((match.rowCount ?? 0) === 0) {
+        throw new Error("Match not found");
+    }
+    // Ownership check for CREATOR role
+    if (actorRole === "CREATOR" && match.rows[0].created_by !== actorUserId) {
+        const err = new Error("You can only unassign scorers from matches you created");
+        err.statusCode = 403;
+        throw err;
+    }
     const result = await db.query(`
     UPDATE match_scorers
     SET is_active = false
@@ -148,6 +221,7 @@ export async function completeMatchService(matchId) {
            result_margin = $4
        WHERE id = $5`, [result, winnerTeamId, resultMethod, resultMargin, matchId]);
         await db.query("COMMIT");
+        emitMatchComplete(matchId, result, winnerTeamId, resultMethod, resultMargin);
         return {
             result,
             winnerTeamId,

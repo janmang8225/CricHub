@@ -30,17 +30,31 @@ export async function submitBallService(matchId: any, actor: any, ball: any) {
       throw new Error("Cannot update scores for completed match");
     }
 
-    // only ADMIN or SCORER allowed
+    // only ADMIN or SCORER (assigned) or CREATOR (own matches) allowed
     if (!actor) throw new Error("Unauthenticated");
     if (actor.role !== "ADMIN") {
-      const perm = await db.query(
-        `
-      SELECT 1 FROM match_scorers
-      WHERE match_id=$1 AND user_id=$2 AND is_active=true
-      `,
-        [matchId, actor.userId]
-      );
-      if (perm.rowCount === 0) {
+      if (actor.role === "CREATOR") {
+        // Check if creator owns this match
+        const ownerCheck = await db.query(
+          `SELECT 1 FROM matches WHERE id=$1 AND created_by=$2`,
+          [matchId, actor.userId]
+        );
+        if (ownerCheck.rowCount === 0) {
+          throw new Error("Not authorized: You can only add balls to matches you created");
+        }
+      } else if (actor.role === "SCORER") {
+        // Check if scorer is assigned to this match
+        const perm = await db.query(
+          `
+        SELECT 1 FROM match_scorers
+        WHERE match_id=$1 AND user_id=$2 AND is_active=true
+        `,
+          [matchId, actor.userId]
+        );
+        if (perm.rowCount === 0) {
+          throw new Error("Not authorized");
+        }
+      } else {
         throw new Error("Not authorized");
       }
     }
@@ -788,44 +802,49 @@ export async function submitBallService(matchId: any, actor: any, ball: any) {
       );
 
       const scores = bothScoresRes.rows;
-      
-      // Find team A and team B scores
-      const teamAScore1 = scores.find(s => s.team_id === match.team_a_id && s.innings === 1);
-      const teamBScore1 = scores.find(s => s.team_id === match.team_b_id && s.innings === 1);
-      const teamAScore2 = scores.find(s => s.team_id === match.team_a_id && s.innings === 2);
-      const teamBScore2 = scores.find(s => s.team_id === match.team_b_id && s.innings === 2);
+      // debug
+      console.log(scores);
+      console.log();
+
+      // Simple: Find innings 1 and innings 2 scores (only 2 rows total)
+      const firstInningsScore = scores.find(s => s.innings === 1);
+      const secondInningsScore = scores.find(s => s.innings === 2);
+
+      // debug
+      console.log('First innings:', firstInningsScore);
+      console.log('Second innings:', secondInningsScore);
+
+      if (!firstInningsScore || !secondInningsScore) {
+        throw new Error("Missing innings data");
+      }
 
       // Determine which team batted first
-      const firstInningsBattingTeamId = 
+      const firstInningsBattingTeamId =
         match.toss_decision === "BAT"
           ? match.toss_winner_team_id
           : (match.team_a_id === match.toss_winner_team_id
               ? match.team_b_id
               : match.team_a_id);
 
-      const secondInningsBattingTeamId = 
+      const secondInningsBattingTeamId =
         firstInningsBattingTeamId === match.team_a_id
           ? match.team_b_id
           : match.team_a_id;
 
-      // Get runs for each team
-      const firstInningsRuns = firstInningsBattingTeamId === match.team_a_id 
-        ? teamAScore1?.runs || 0
-        : teamBScore1?.runs || 0;
-
-      const secondInningsRuns = secondInningsBattingTeamId === match.team_a_id
-        ? (teamAScore2?.runs || 0)
-        : (teamBScore2?.runs || 0);
-
-      const secondInningsWickets = secondInningsBattingTeamId === match.team_a_id
-        ? (teamAScore2?.wickets || 0)
-        : (teamBScore2?.wickets || 0);
+      // Get runs directly from the innings scores
+      const firstInningsRuns = firstInningsScore.runs || 0;
+      const secondInningsRuns = secondInningsScore.runs || 0;
+      const secondInningsWickets = secondInningsScore.wickets || 0;
 
       let winnerTeamId = null;
       let resultMethod = null;
       let resultMargin = 0;
       let result = 'WIN';
 
+      // debug
+      console.log();
+      console.log('First innings runs:', firstInningsRuns);
+      console.log('Second innings runs:', secondInningsRuns);
       // STEP 76 + 78-82: Determine winner and result
       if (secondInningsRuns > firstInningsRuns) {
         // Team batting second won by wickets
@@ -838,12 +857,21 @@ export async function submitBallService(matchId: any, actor: any, ball: any) {
         resultMethod = 'RUNS';
         resultMargin = firstInningsRuns - secondInningsRuns;
       } else {
-        // Scores are tied
-        result = 'TIE';
+        // Scores are tied (debug - fix 1 (changed 'TIE' to 'DRAW'))
+        // result type: ('WIN','DRAW')
+        // result method type: ('RUNS','WICKETS','TIE','NO_RESULT')
+        result = 'DRAW';
         resultMethod = 'TIE';
         winnerTeamId = null;
         resultMargin = 0;
       }
+
+      // debug
+      console.log();
+      console.log(result);
+      console.log(resultMethod);
+      console.log(winnerTeamId);
+      console.log();
 
       // STEP 77-82: Update match with result
       await db.query(

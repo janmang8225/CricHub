@@ -3,14 +3,18 @@ import jwt from "jsonwebtoken";
 import db from "../../config/db.js";
 import { env } from "../../config/env.js";
 
-export async function signupUser(email: string, password: string) {
+export async function signupUser(email: string, password: string, role?: string) {
   const hash = await bcrypt.hash(password, 10);
+
+  // Validate role - only allow USER, CREATOR, SCORER
+  const allowedRoles = ["USER", "CREATOR", "SCORER"];
+  const userRole = role && allowedRoles.includes(role) ? role : "USER";
 
   const result = await db.query(
     `INSERT INTO users (email, password_hash, role)
-     VALUES ($1, $2, 'USER')
-     RETURNING id`,
-    [email, hash]
+     VALUES ($1, $2, $3)
+     RETURNING id, role`,
+    [email, hash, userRole]
   );
 
   return jwt.sign(

@@ -1,1 +1,1 @@
-export type UserRole = "ADMIN" | "SCORER" | "USER" | "PLAYER";
+export type UserRole = "ADMIN" | "CREATOR" | "SCORER" | "USER" | "PLAYER";

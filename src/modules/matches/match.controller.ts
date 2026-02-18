@@ -16,7 +16,7 @@ export async function assignScorer(
   try {
     const matchId = req.params.id;
     const { userId } = req.body;
-    const admin = (req as any).user;
+    const user = (req as any).user;
 
     if (!matchId || !userId) {
       return res.status(400).json({ message: "matchId and userId required" });
@@ -25,7 +25,9 @@ export async function assignScorer(
     const result = await assignScorerService(
       matchId,
       userId,
-      admin.userId
+      user.userId,
+      user.role,
+      user.userId
     );
 
     res.status(201).json(result);
@@ -41,12 +43,13 @@ export async function unassignScorer(
 ) {
   try {
     const { id: matchId, userId } = req.params;
+    const user = (req as any).user;
 
     if (!matchId || !userId) {
       return res.status(400).json({ message: "matchId and userId required" });
     }
 
-    const result = await unassignScorerService(matchId, userId);
+    const result = await unassignScorerService(matchId, userId, user.role, user.userId);
     res.json(result);
   } catch (e) {
     next(e);

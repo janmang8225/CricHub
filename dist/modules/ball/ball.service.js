@@ -1,4 +1,5 @@
 import db from "../../config/db.js";
+import { emitBallAdded, emitScoreUpdate, emitWicket, emitOverComplete, emitInningsEnd, emitMatchComplete, emitMilestone, emitPartnershipUpdate } from "../../websocket/websocket.emitters.js";
 export async function submitBallService(matchId, actor, ball) {
     await db.query("BEGIN");
     try {
@@ -14,15 +15,28 @@ export async function submitBallService(matchId, actor, ball) {
         if (match.status === 'COMPLETED') {
             throw new Error("Cannot update scores for completed match");
         }
-        // only ADMIN or SCORER allowed
+        // only ADMIN or SCORER (assigned) or CREATOR (own matches) allowed
         if (!actor)
             throw new Error("Unauthenticated");
         if (actor.role !== "ADMIN") {
-            const perm = await db.query(`
-      SELECT 1 FROM match_scorers
-      WHERE match_id=$1 AND user_id=$2 AND is_active=true
-      `, [matchId, actor.userId]);
-            if (perm.rowCount === 0) {
+            if (actor.role === "CREATOR") {
+                // Check if creator owns this match
+                const ownerCheck = await db.query(`SELECT 1 FROM matches WHERE id=$1 AND created_by=$2`, [matchId, actor.userId]);
+                if (ownerCheck.rowCount === 0) {
+                    throw new Error("Not authorized: You can only add balls to matches you created");
+                }
+            }
+            else if (actor.role === "SCORER") {
+                // Check if scorer is assigned to this match
+                const perm = await db.query(`
+        SELECT 1 FROM match_scorers
+        WHERE match_id=$1 AND user_id=$2 AND is_active=true
+        `, [matchId, actor.userId]);
+                if (perm.rowCount === 0) {
+                    throw new Error("Not authorized");
+                }
+            }
+            else {
                 throw new Error("Not authorized");
             }
         }
@@ -589,11 +603,18 @@ export async function submitBallService(matchId, actor, ball) {
          WHERE match_id=$1
          ORDER BY innings, team_id`, [matchId]);
             const scores = bothScoresRes.rows;
-            // Find team A and team B scores
-            const teamAScore1 = scores.find(s => s.team_id === match.team_a_id && s.innings === 1);
-            const teamBScore1 = scores.find(s => s.team_id === match.team_b_id && s.innings === 1);
-            const teamAScore2 = scores.find(s => s.team_id === match.team_a_id && s.innings === 2);
-            const teamBScore2 = scores.find(s => s.team_id === match.team_b_id && s.innings === 2);
+            // debug
+            console.log(scores);
+            console.log();
+            // Simple: Find innings 1 and innings 2 scores (only 2 rows total)
+            const firstInningsScore = scores.find(s => s.innings === 1);
+            const secondInningsScore = scores.find(s => s.innings === 2);
+            // debug
+            console.log('First innings:', firstInningsScore);
+            console.log('Second innings:', secondInningsScore);
+            if (!firstInningsScore || !secondInningsScore) {
+                throw new Error("Missing innings data");
+            }
             // Determine which team batted first
             const firstInningsBattingTeamId = match.toss_decision === "BAT"
                 ? match.toss_winner_team_id
@@ -603,20 +624,18 @@ export async function submitBallService(matchId, actor, ball) {
             const secondInningsBattingTeamId = firstInningsBattingTeamId === match.team_a_id
                 ? match.team_b_id
                 : match.team_a_id;
-            // Get runs for each team
-            const firstInningsRuns = firstInningsBattingTeamId === match.team_a_id
-                ? teamAScore1?.runs || 0
-                : teamBScore1?.runs || 0;
-            const secondInningsRuns = secondInningsBattingTeamId === match.team_a_id
-                ? (teamAScore2?.runs || 0)
-                : (teamBScore2?.runs || 0);
-            const secondInningsWickets = secondInningsBattingTeamId === match.team_a_id
-                ? (teamAScore2?.wickets || 0)
-                : (teamBScore2?.wickets || 0);
+            // Get runs directly from the innings scores
+            const firstInningsRuns = firstInningsScore.runs || 0;
+            const secondInningsRuns = secondInningsScore.runs || 0;
+            const secondInningsWickets = secondInningsScore.wickets || 0;
             let winnerTeamId = null;
             let resultMethod = null;
             let resultMargin = 0;
             let result = 'WIN';
+            // debug
+            console.log();
+            console.log('First innings runs:', firstInningsRuns);
+            console.log('Second innings runs:', secondInningsRuns);
             // STEP 76 + 78-82: Determine winner and result
             if (secondInningsRuns > firstInningsRuns) {
                 // Team batting second won by wickets
@@ -631,12 +650,20 @@ export async function submitBallService(matchId, actor, ball) {
                 resultMargin = firstInningsRuns - secondInningsRuns;
             }
             else {
-                // Scores are tied
-                result = 'TIE';
+                // Scores are tied (debug - fix 1 (changed 'TIE' to 'DRAW'))
+                // result type: ('WIN','DRAW')
+                // result method type: ('RUNS','WICKETS','TIE','NO_RESULT')
+                result = 'DRAW';
                 resultMethod = 'TIE';
                 winnerTeamId = null;
                 resultMargin = 0;
             }
+            // debug
+            console.log();
+            console.log(result);
+            console.log(resultMethod);
+            console.log(winnerTeamId);
+            console.log();
             // STEP 77-82: Update match with result
             await db.query(`UPDATE matches
          SET status = 'COMPLETED',
@@ -678,6 +705,8 @@ export async function submitBallService(matchId, actor, ball) {
                             await db.query(`INSERT INTO player_milestones 
                  (match_id, innings, player_id, milestone_type, milestone_value, achieved_over, achieved_ball)
                  VALUES ($1, $2, $3, 'RUNS', $4, $5, $6)`, [matchId, currentInnings, ball.strikerId, milestone, ball.over, ball.ball]);
+                            // runs milestone emit
+                            emitMilestone(matchId, ball.strikerId, 'RUNS', milestone, ball.over, ball.ball);
                         }
                     }
                     else {
@@ -692,6 +721,8 @@ export async function submitBallService(matchId, actor, ball) {
                      achieved_ball = $3
                  WHERE match_id=$4 AND innings=$5 AND player_id=$6 
                    AND milestone_type='RUNS'`, [milestone, ball.over, ball.ball, matchId, currentInnings, ball.strikerId]);
+                            // runs milestone emit
+                            emitMilestone(matchId, ball.strikerId, 'RUNS', milestone, ball.over, ball.ball);
                         }
                     }
                 }
@@ -719,6 +750,8 @@ export async function submitBallService(matchId, actor, ball) {
                             await db.query(`INSERT INTO player_milestones 
                  (match_id, innings, player_id, milestone_type, milestone_value, achieved_over, achieved_ball)
                  VALUES ($1, $2, $3, 'WICKETS', $4, $5, $6)`, [matchId, currentInnings, ball.bowlerId, milestone, ball.over, ball.ball]);
+                            // wicket milestone emit
+                            emitMilestone(matchId, ball.bowlerId, 'WICKETS', milestone, ball.over, ball.ball);
                         }
                     }
                     else {
@@ -733,6 +766,8 @@ export async function submitBallService(matchId, actor, ball) {
                      achieved_ball = $3
                  WHERE match_id=$4 AND innings=$5 AND player_id=$6 
                    AND milestone_type='WICKETS'`, [milestone, ball.over, ball.ball, matchId, currentInnings, ball.bowlerId]);
+                            // wicket milestone emit
+                            emitMilestone(matchId, ball.bowlerId, 'WICKETS', milestone, ball.over, ball.ball);
                         }
                     }
                 }
@@ -764,11 +799,80 @@ export async function submitBallService(matchId, actor, ball) {
                         await db.query(`INSERT INTO player_milestones 
                (match_id, innings, player_id, milestone_type, milestone_value, achieved_over, achieved_ball)
                VALUES ($1, $2, $3, 'HAT_TRICK', 3, $4, $5)`, [matchId, currentInnings, ball.bowlerId, ball.over, ball.ball]);
+                        // hat-trick milestone emit
+                        emitMilestone(matchId, ball.bowlerId, 'HAT_TRICK', 3, ball.over, ball.ball);
                     } // changed: null -> 3
                 }
             }
         }
         await db.query("COMMIT");
+        // ============ WEBSOCKET EMISSIONS (AFTER SUCCESSFUL COMMIT) ============
+        // Emit ball added event
+        emitBallAdded(matchId, currentInnings, ball.over, ball.ball, ball.runsOffBat, ball.extraRuns, ball.isWicket, ball.boundary, ball.isWide, ball.isNoBall);
+        // Get updated stats for WebSocket broadcast
+        const strikerStatsRes = await db.query(`SELECT runs, balls, fours, sixes FROM match_batting_stats
+       WHERE match_id=$1 AND player_id=$2`, [matchId, ball.strikerId]);
+        const nonStrikerStatsRes = await db.query(`SELECT runs, balls, fours, sixes FROM match_batting_stats
+       WHERE match_id=$1 AND player_id=$2`, [matchId, ball.nonStrikerId]);
+        const bowlerStatsRes = await db.query(`SELECT balls, runs_conceded, wickets FROM match_bowling_stats
+       WHERE match_id=$1 AND player_id=$2`, [matchId, ball.bowlerId]);
+        const strikerStats = strikerStatsRes.rows[0];
+        const nonStrikerStats = nonStrikerStatsRes.rows[0];
+        const bowlerStats = bowlerStatsRes.rows[0];
+        // Emit score update
+        emitScoreUpdate(matchId, battingTeamId, currentScore.runs, currentScore.wickets, oversDecimal, {
+            id: ball.strikerId,
+            runs: strikerStats.runs,
+            balls: strikerStats.balls,
+            fours: strikerStats.fours,
+            sixes: strikerStats.sixes,
+        }, {
+            id: ball.nonStrikerId,
+            runs: nonStrikerStats.runs,
+            balls: nonStrikerStats.balls,
+            fours: nonStrikerStats.fours,
+            sixes: nonStrikerStats.sixes,
+        }, {
+            id: ball.bowlerId,
+            balls: bowlerStats.balls,
+            runsConceded: bowlerStats.runs_conceded,
+            wickets: bowlerStats.wickets,
+        });
+        // Emit wicket event if wicket fell
+        if (ball.isWicket) {
+            emitWicket(matchId, ball.wicket, ball.dismissedPlayerId, currentScore.wickets, currentScore.runs, ball.over, ball.ball);
+        }
+        // Emit over complete event if over just completed
+        const legalBallsInOverCheck = await db.query(`SELECT COUNT(*) as legal_balls
+       FROM balls
+       WHERE match_id=$1 AND innings=$2 AND over=$3 
+         AND is_wide=false AND is_no_ball=false`, [matchId, currentInnings, ball.over]);
+        if (parseInt(legalBallsInOverCheck.rows[0].legal_balls) === 6) {
+            const overSummaryRes = await db.query(`SELECT runs, wickets, extras FROM over_summary
+         WHERE match_id=$1 AND innings=$2 AND over=$3`, [matchId, currentInnings, ball.over]);
+            // if ( (overSummaryRes.rowCount ?? 0) > 0 ) {
+            if (overSummaryRes.rowCount !== null && overSummaryRes.rowCount > 0) {
+                const summary = overSummaryRes.rows[0];
+                emitOverComplete(matchId, currentInnings, ball.over, summary.runs, summary.wickets, summary.extras);
+            }
+        }
+        // Emit innings end event if innings ended
+        if (inningsEnded) {
+            emitInningsEnd(matchId, currentInnings, inningsEndReason, match.target_score);
+        }
+        // Emit match complete event if match completed
+        if (matchCompleted && matchResult) {
+            emitMatchComplete(matchId, matchResult.result, matchResult.winnerTeamId, matchResult.resultMethod, matchResult.resultMargin);
+        }
+        // Emit partnership update (get current partnership)
+        const currentPartnershipRes = await db.query(`SELECT runs, balls FROM partnerships
+       WHERE match_id=$1 AND innings=$2
+         AND ((batter1_id=$3 AND batter2_id=$4) OR (batter1_id=$4 AND batter2_id=$3))
+         AND end_over IS NULL`, [matchId, currentInnings, ball.strikerId, ball.nonStrikerId]);
+        if (currentPartnershipRes.rowCount != null && currentPartnershipRes.rowCount > 0 && !ball.isWicket) {
+            const partnership = currentPartnershipRes.rows[0];
+            emitPartnershipUpdate(matchId, ball.strikerId, ball.nonStrikerId, partnership.runs, partnership.balls);
+        }
         return {
             message: "Ball added",
             over: ball.over,

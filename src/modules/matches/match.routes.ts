@@ -14,18 +14,18 @@ import { switchInnings } from "../innings/innings.controller.js";
 
 const router = Router();
 
-router.post("/", authMiddleware, requireRole(["ADMIN"]), createMatch); 
+router.post("/", authMiddleware, requireRole(["ADMIN", "CREATOR"]), createMatch); 
 router.get("/", publicRateLimiter, withCache(5), listMatches);
 
-router.post("/:id/scorers", authMiddleware, requireRole(["ADMIN"]), assignScorer);
+router.post("/:id/scorers", authMiddleware, requireRole(["ADMIN", "CREATOR"]), assignScorer);
 router.post("/:id/balls", authMiddleware, submitBall);
-router.post("/:id/innings/switch", authMiddleware, switchInnings);
+router.post("/:id/innings/switch", authMiddleware, requireRole(["ADMIN", "SCORER", "CREATOR"]), switchInnings);
 
-router.patch("/:id/scorers/:userId/deactivate", authMiddleware, requireRole(["ADMIN"]), unassignScorer);
+router.patch("/:id/scorers/:userId/deactivate", authMiddleware, requireRole(["ADMIN", "CREATOR"]), unassignScorer);
 router.get("/:id", publicRateLimiter, withCache(5), getMatch);
 
 // change1
-router.post("/:id/playing-xi", authMiddleware, requireRole(["ADMIN"]), setPlayingXI);
+router.post("/:id/playing-xi", authMiddleware, requireRole(["ADMIN", "CREATOR"]), setPlayingXI);
 // to call this route, use this format:
 /*
 {

@@ -1,24 +1,30 @@
 // score.service.ts
 import db from "../../config/db.js";
+import { emitBatsmanChange, emitBowlerChange } from "../../websocket/websocket.emitters.js";
 export async function initScoresService(matchId) {
-    // match must exist
-    const matchRes = await db.query("SELECT team_a_id, team_b_id, status FROM matches WHERE id=$1", [matchId]);
+    // match must exist and have toss completed
+    const matchRes = await db.query("SELECT team_a_id, team_b_id, status, toss_winner_team_id, toss_decision FROM matches WHERE id=$1", [matchId]);
     if (matchRes.rowCount === 0)
         throw new Error("Match not found");
-    const { team_a_id, team_b_id } = matchRes.rows[0];
+    const { team_a_id, team_b_id, toss_winner_team_id, toss_decision } = matchRes.rows[0];
     if (!team_a_id || !team_b_id) {
         throw new Error("Both teams must be set before initializing scores");
+    }
+    if (!toss_winner_team_id || !toss_decision) {
+        throw new Error("Toss must be completed before initializing scores");
     }
     // prevent double init
     const existing = await db.query("SELECT 1 FROM scores WHERE match_id=$1", [matchId]);
     if (existing.rowCount !== null && existing.rowCount > 0) {
         throw new Error("Scores already initialized");
     }
-    // create two rows; Team A bats first by default
-    await db.query(`
-    INSERT INTO scores (match_id, team_id, innings)
-    VALUES ($1, $2, 1), ($1, $3, 1)
-    `, [matchId, team_a_id, team_b_id]); // check (updated is_batting with innings)
+    // Determine which team bats first
+    const firstBattingTeamId = toss_decision === "BAT"
+        ? toss_winner_team_id
+        : (team_a_id === toss_winner_team_id ? team_b_id : team_a_id);
+    // Create ONLY ONE row for the team batting first in innings 1
+    await db.query(`INSERT INTO scores (match_id, team_id, innings)
+     VALUES ($1, $2, 1)`, [matchId, firstBattingTeamId]);
     return { message: "Scores initialized" };
 }
 export async function updateScoreService(matchId, teamId, runs, wickets, overs, actor) {
@@ -55,18 +61,21 @@ export async function updateScoreService(matchId, teamId, runs, wickets, overs, 
         if (belongs.rowCount === 0) {
             throw new Error("Team does not belong to this match");
         }
-        // permission check (ADMIN OR assigned SCORER)
+        // permission check (ADMIN OR assigned SCORER OR match CREATOR)
         const perm = await db.query(`
       SELECT 1
       FROM scores s
       LEFT JOIN match_scorers ms
         ON ms.match_id = s.match_id
-      AND ms.user_id = $2
-      AND ms.is_active = true
+        AND ms.user_id = $2
+        AND ms.is_active = true
+      LEFT JOIN matches m
+        ON m.id = s.match_id
       WHERE s.match_id = $1
         AND (
           $3 = 'ADMIN'
           OR ($3 = 'SCORER' AND ms.user_id IS NOT NULL)
+          OR ($3 = 'CREATOR' AND m.created_by = $2)
         )
       LIMIT 1
       `, [matchId, actor.userId, actor.role]);
@@ -299,6 +308,8 @@ export async function setOpenersService(matchId, strikerId, nonStrikerId) {
        VALUES ($1, $2, $3, 0, 0, 0, 0, false)
        ON CONFLICT (match_id, player_id) DO NOTHING`, [matchId, nonStrikerId, battingTeamId]);
         await db.query("COMMIT");
+        emitBatsmanChange(matchId, strikerId, 'STRIKER');
+        emitBatsmanChange(matchId, nonStrikerId, 'NON_STRIKER');
     }
     catch (e) {
         await db.query("ROLLBACK");
@@ -356,6 +367,7 @@ export async function setNextBatsmanService(matchId, newBatsmanId) {
        VALUES ($1, $2, $3, 0, 0, 0, 0, false)
        ON CONFLICT (match_id, player_id) DO NOTHING`, [matchId, newBatsmanId, battingTeamId]);
         await db.query("COMMIT");
+        emitBatsmanChange(matchId, newBatsmanId, 'STRIKER');
     }
     catch (e) {
         await db.query("ROLLBACK");
@@ -423,6 +435,7 @@ export async function setBowlerService(matchId, over, bowlerId) {
        VALUES ($1, $2, $3, 0, 0, 0, 0, 0)
        ON CONFLICT (match_id, player_id) DO NOTHING`, [matchId, bowlerId, bowlingTeamId]);
         await db.query("COMMIT");
+        emitBowlerChange(matchId, bowlerId, over);
     }
     catch (e) {
         await db.query("ROLLBACK");

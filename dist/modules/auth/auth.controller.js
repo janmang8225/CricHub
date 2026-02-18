@@ -2,7 +2,7 @@ import { signupUser, loginUser } from "./auth.service.js";
 export async function signup(req, res, next) {
     try {
         console.log("req signup");
-        const token = await signupUser(req.body.email, req.body.password);
+        const token = await signupUser(req.body.email, req.body.password, req.body.role);
         res.json({ token });
         console.log("req done signup");
     }
