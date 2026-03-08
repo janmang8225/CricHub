@@ -5,19 +5,19 @@ import { createMatch, listMatches, getMatch, setPlayingXI } from "./match.contro
 import { requireRole } from "../../middlewares/role.middleware.js";
 import { assignScorer, unassignScorer, } from "./match.controller.js";
 import { withCache } from "../../middlewares/cache.middleware.js";
-import { publicRateLimiter } from "../../middlewares/rateLimit.middleware.js";
+import { adminWriteRateLimiter, publicRateLimiter, authenticatedRateLimiter, inningsControlRateLimit } from "../../middlewares/rateLimit.middleware.js";
 import { submitBall } from "../ball/ball.controller.js";
 import { switchInnings } from "../innings/innings.controller.js";
 const router = Router();
-router.post("/", authMiddleware, requireRole(["ADMIN", "CREATOR"]), createMatch);
+router.post("/", authMiddleware, requireRole(["ADMIN", "CREATOR"]), authenticatedRateLimiter, createMatch);
 router.get("/", publicRateLimiter, withCache(5), listMatches);
-router.post("/:id/scorers", authMiddleware, requireRole(["ADMIN", "CREATOR"]), assignScorer);
+router.post("/:id/scorers", authMiddleware, requireRole(["ADMIN", "CREATOR"]), authenticatedRateLimiter, assignScorer);
 router.post("/:id/balls", authMiddleware, submitBall);
-router.post("/:id/innings/switch", authMiddleware, requireRole(["ADMIN", "SCORER", "CREATOR"]), switchInnings);
-router.patch("/:id/scorers/:userId/deactivate", authMiddleware, requireRole(["ADMIN", "CREATOR"]), unassignScorer);
+router.post("/:id/innings/switch", authMiddleware, requireRole(["ADMIN", "SCORER", "CREATOR"]), inningsControlRateLimit, switchInnings);
+router.patch("/:id/scorers/:userId/deactivate", authMiddleware, requireRole(["ADMIN", "CREATOR"]), authenticatedRateLimiter, unassignScorer);
 router.get("/:id", publicRateLimiter, withCache(5), getMatch);
 // change1
-router.post("/:id/playing-xi", authMiddleware, requireRole(["ADMIN", "CREATOR"]), setPlayingXI);
+router.post("/:id/playing-xi", authMiddleware, requireRole(["ADMIN", "CREATOR"]), authenticatedRateLimiter, setPlayingXI);
 // to call this route, use this format:
 /*
 {

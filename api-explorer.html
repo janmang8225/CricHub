@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>CricHub API High-Performance Explorer</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#137fec",
+                        "primary-hover": "#0f6bd0",
+                        "background-light": "#ffffff",
+                        "background-dark": "#101922",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "mono": ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono", "Courier New", "monospace"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .code-container {
+            background-color: #1e293b;
+            color: #e2e8f0;
+        }
+        .json-key { color: #93c5fd; }
+        .json-string { color: #86efac; }
+        .json-number { color: #fdba74; }
+        .editable-code-area {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            line-height: 1.5;
+        }
+        .editable-code-area:focus {
+            outline: none;
+        }
+        .sidebar-scroll::-webkit-scrollbar {
+            width: 5px;
+        }
+        .sidebar-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .sidebar-scroll::-webkit-scrollbar-thumb {
+            background-color: #e2e8f0;
+            border-radius: 20px;
+        }
+        .dark .sidebar-scroll::-webkit-scrollbar-thumb {
+            background-color: #334155;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 antialiased">
+    <div class="relative flex min-h-screen flex-col overflow-x-hidden">
+        <!-- Header -->
+        <header class="sticky top-0 z-50 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div class="flex items-center gap-8">
+                <div class="flex items-center gap-3">
+                    <div class="flex size-9 items-center justify-center rounded-lg bg-primary text-white shadow-md shadow-primary/20">
+                        <span class="material-symbols-outlined">api</span>
+                    </div>
+                    <h2 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white">CricHub API</h2>
+                </div>
+                <nav class="hidden items-center gap-6 lg:flex">
+                    <a class="text-sm font-medium text-primary dark:text-primary" href="#">API Reference</a>
+                </nav>
+            </div>
+            <div class="flex flex-1 justify-end gap-4">
+                <div class="relative hidden w-full max-w-sm md:block">
+                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                        <span class="material-symbols-outlined text-[20px]">search</span>
+                    </div>
+                    <input id="searchInput" class="w-full rounded-lg border-none bg-slate-100 py-2 pl-10 pr-4 text-sm shadow-inner transition-shadow focus:bg-white focus:ring-2 focus:ring-primary/20 dark:bg-slate-800 dark:text-white" placeholder="Search endpoints..." type="text"/>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex flex-1">
+            <!-- Sidebar -->
+            <aside class="sticky top-[61px] hidden h-[calc(100vh-61px)] w-80 border-r border-slate-200 bg-white py-6 dark:border-slate-800 dark:bg-slate-900 xl:block sidebar-scroll overflow-y-auto">
+                <div class="px-6 pb-6">
+                    <div class="mb-4 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        API Version
+                        <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-400">v1.0.0</span>
+                    </div>
+                    <div class="relative">
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Servers</label>
+                        <div class="relative">
+                            <select id="serverSelect" class="w-full appearance-none rounded-lg border border-slate-200 bg-slate-50 py-2 pl-3 pr-8 text-sm font-medium text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                <option value="http://localhost:3000">Development (localhost:3000)</option>
+                                <option value="https://api.crichub.com">Production (api.crichub.com)</option>
+                                <option value="https://staging.crichub.com">Staging (staging.crichub.com)</option>
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+                                <span class="material-symbols-outlined text-[18px]">expand_more</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <nav class="space-y-6 px-4" id="sidebarNav">
+                    <!-- Authentication -->
+                    <div>
+                        <h3 class="mb-2 px-2 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">Authentication</h3>
+                        <div class="space-y-1">
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="signup">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-emerald-100 text-[10px] font-black tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">POST</span>
+                                <span class="truncate">Sign Up</span>
+                            </a>
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="login">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-emerald-100 text-[10px] font-black tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">POST</span>
+                                <span class="truncate">Login</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Users -->
+                    <div>
+                        <h3 class="mb-2 px-2 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">Users</h3>
+                        <div class="space-y-1">
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="getUsers">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-blue-100 text-[10px] font-black tracking-wide text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">GET</span>
+                                <span class="truncate">Get All Users</span>
+                            </a>
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="updateUserRole">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-orange-100 text-[10px] font-black tracking-wide text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">PATCH</span>
+                                <span class="truncate">Update User Role</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Players -->
+                    <div>
+                        <h3 class="mb-2 px-2 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">Players</h3>
+                        <div class="space-y-1">
+                            <a class="group flex items-center gap-3 rounded-lg bg-primary/5 px-2 py-2 text-base font-bold text-primary ring-1 ring-inset ring-primary/10 dark:bg-primary/10 dark:ring-primary/20" href="#" data-endpoint="createPlayer">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-emerald-100 text-[10px] font-black tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 shadow-sm">POST</span>
+                                <span class="truncate">Create Player</span>
+                            </a>
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="getPlayers">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-blue-100 text-[10px] font-black tracking-wide text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">GET</span>
+                                <span class="truncate">Get All Players</span>
+                            </a>
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="updatePlayerRole">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-orange-100 text-[10px] font-black tracking-wide text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">PATCH</span>
+                                <span class="truncate">Update Player Role</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Teams -->
+                    <div>
+                        <h3 class="mb-2 px-2 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">Teams</h3>
+                        <div class="space-y-1">
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="createTeam">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-emerald-100 text-[10px] font-black tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">POST</span>
+                                <span class="truncate">Create Team</span>
+                            </a>
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="getTeams">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-blue-100 text-[10px] font-black tracking-wide text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">GET</span>
+                                <span class="truncate">Get All Teams</span>
+                            </a>
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="addPlayerToTeam">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-emerald-100 text-[10px] font-black tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">POST</span>
+                                <span class="truncate">Add Player to Team</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Matches -->
+                    <div>
+                        <h3 class="mb-2 px-2 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">Matches</h3>
+                        <div class="space-y-1">
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="createMatch">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-emerald-100 text-[10px] font-black tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">POST</span>
+                                <span class="truncate">Create Match</span>
+                            </a>
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="startMatch">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-emerald-100 text-[10px] font-black tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">POST</span>
+                                <span class="truncate">Start Match</span>
+                            </a>
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="getMatchScore">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-blue-100 text-[10px] font-black tracking-wide text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">GET</span>
+                                <span class="truncate">Get Match Score</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Scoring -->
+                    <div>
+                        <h3 class="mb-2 px-2 text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">Scoring</h3>
+                        <div class="space-y-1">
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="addBall">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-emerald-100 text-[10px] font-black tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">POST</span>
+                                <span class="truncate">Add Ball</span>
+                            </a>
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="setOpeners">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-emerald-100 text-[10px] font-black tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">POST</span>
+                                <span class="truncate">Set Openers</span>
+                            </a>
+                            <a class="group flex items-center gap-3 rounded-lg px-2 py-2 text-base font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 transition-colors" href="#" data-endpoint="setBowler">
+                                <span class="flex h-5 w-11 items-center justify-center rounded bg-emerald-100 text-[10px] font-black tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">POST</span>
+                                <span class="truncate">Set Bowler</span>
+                            </a>
+                        </div>
+                    </div>
+                </nav>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1 overflow-y-auto bg-background-light p-6 lg:p-10 dark:bg-background-dark">
+                <div class="mx-auto max-w-6xl">
+                    <!-- Global Authorization -->
+                    <div class="mb-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="flex size-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                    <span class="material-symbols-outlined">vpn_key</span>
+                                </div>
+                                <div>
+                                    <h3 class="text-sm font-bold text-slate-900 dark:text-white">Global Authorization</h3>
+                                    <p class="text-xs text-slate-500">Enter your Bearer Token to authenticate requests.</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-1 items-center gap-3 md:max-w-xl">
+                                <div class="relative w-full">
+                                    <input id="authToken" class="w-full rounded-lg border-slate-200 bg-slate-50 py-2.5 pl-4 pr-10 text-sm font-mono text-slate-600 placeholder:text-slate-400 focus:border-primary focus:bg-white focus:ring-4 focus:ring-primary/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white" placeholder="eyJhGciOiJIUzI1NiIsInR5..." type="password"/>
+                                    <button id="toggleToken" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                                        <span class="material-symbols-outlined text-[18px]">visibility_off</span>
+                                    </button>
+                                </div>
+                                <button id="authorizeBtn" class="whitespace-nowrap rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-bold text-white shadow-md hover:bg-slate-800 hover:shadow-lg transition-all dark:bg-white dark:text-slate-900">
+                                    Authorize
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Breadcrumb -->
+                    <nav class="mb-4 flex items-center gap-2 text-sm font-medium text-slate-500">
+                        <a class="hover:text-slate-800" href="#">API Reference</a>
+                        <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+                        <span id="breadcrumbCategory" class="hover:text-slate-800">Players</span>
+                        <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+                        <span id="breadcrumbEndpoint" class="text-slate-900 dark:text-white">Create Player</span>
+                    </nav>
+
+                    <!-- Endpoint Header -->
+                    <div class="mb-8 flex flex-col justify-between gap-6 md:flex-row md:items-end">
+                        <div class="space-y-2">
+                            <h1 id="endpointTitle" class="text-4xl font-black tracking-tight text-slate-900 dark:text-white">Create Player</h1>
+                            <p id="endpointDescription" class="max-w-2xl text-lg text-slate-600 dark:text-slate-400 leading-relaxed">
+                                Create a new player. Requires ADMIN or CREATOR role.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Endpoint Info -->
+                    <div class="mb-10 flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                        <div class="flex flex-wrap items-center gap-4 bg-slate-50 px-4 py-3 dark:bg-slate-800/50">
+                            <span id="methodBadge" class="rounded bg-emerald-100 px-2.5 py-1 text-xs font-black uppercase text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 shadow-sm">POST</span>
+                            <code id="endpointPath" class="font-mono text-sm font-medium text-slate-700 dark:text-slate-300">/players</code>
+                            <div class="ml-auto flex items-center gap-2">
+                                <span class="flex items-center gap-1 text-[11px] font-bold text-slate-400 uppercase tracking-tighter">
+                                    <span class="material-symbols-outlined text-[14px]">bolt</span>
+                                    <span id="rateLimit">Rate Limit: 100/min</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Content Grid -->
+                    <div class="grid grid-cols-1 gap-10 xl:grid-cols-12">
+                        <!-- Left Column - Request Details -->
+                        <div class="space-y-10 xl:col-span-7">
+                            <!-- Request Body -->
+                            <section id="requestBodySection">
+                                <div class="mb-6 flex items-center justify-between">
+                                    <h3 class="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-white">
+                                        <span class="material-symbols-outlined text-primary">data_object</span>
+                                        Request Body
+                                    </h3>
+                                    <div class="flex gap-2">
+                                        <span class="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:bg-slate-800 dark:text-slate-400">application/json</span>
+                                        <span class="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">Required</span>
+                                    </div>
+                                </div>
+                                <div class="group relative overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-all focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10 dark:border-slate-800 dark:bg-slate-900">
+                                    <div class="absolute right-4 top-4 z-10 opacity-0 transition-opacity group-hover:opacity-100">
+                                        <button id="copyRequestBtn" class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800">
+                                            <span class="material-symbols-outlined text-[18px]">content_copy</span>
+                                        </button>
+                                    </div>
+                                    <div class="flex border-b border-slate-100 bg-slate-50 px-4 py-2 dark:border-slate-800 dark:bg-slate-800/50">
+                                        <span class="text-xs font-semibold text-slate-500">Editable JSON</span>
+                                    </div>
+                                    <div class="relative">
+                                        <textarea id="requestBody" class="editable-code-area h-[300px] w-full resize-none border-none bg-white p-6 text-sm text-slate-800 focus:ring-0 dark:bg-slate-950 dark:text-slate-200" spellcheck="false">{
+  "name": "Virat Kohli"
+}</textarea>
+                                    </div>
+                                </div>
+                                <p class="mt-3 text-sm text-slate-500">
+                                    Modify the JSON above to test different scenarios.
+                                </p>
+                            </section>
+
+                            <!-- Headers -->
+                            <section>
+                                <h3 class="mb-6 flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-white">
+                                    <span class="material-symbols-outlined text-primary">shield</span>
+                                    Headers
+                                </h3>
+                                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                                    <div class="flex items-start justify-between">
+                                        <div class="space-y-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-mono text-sm font-bold text-slate-700 dark:text-slate-300">Content-Type</span>
+                                                <span class="text-[10px] font-bold text-rose-500 uppercase">Required</span>
+                                            </div>
+                                            <p class="text-xs text-slate-500">Must be application/json.</p>
+                                        </div>
+                                        <input class="w-48 rounded-lg border-slate-200 bg-slate-50 text-sm text-slate-500 focus:border-primary focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400" disabled type="text" value="application/json"/>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+
+                        <!-- Right Column - Execution -->
+                        <div class="space-y-6 xl:col-span-5">
+                            <div class="sticky top-24">
+                                <!-- Execute Button -->
+                                <div class="mb-6 rounded-xl border border-primary/20 bg-primary/5 p-6 shadow-sm">
+                                    <div class="flex flex-col gap-4">
+                                        <div class="space-y-1">
+                                            <div class="flex items-center justify-between">
+                                                <h4 class="text-sm font-bold text-slate-900 dark:text-white">Endpoint Execution</h4>
+                                                <div class="flex h-2 w-2">
+                                                    <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-primary opacity-75"></span>
+                                                    <span class="relative inline-flex h-2 w-2 rounded-full bg-primary"></span>
+                                                </div>
+                                            </div>
+                                            <p class="text-xs text-slate-500">Execute this request against the active server environment to validate integration.</p>
+                                        </div>
+                                        <button id="executeBtn" class="w-full rounded-lg bg-primary py-3 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-primary/20 transition-all hover:translate-y-[-1px] hover:bg-primary-hover hover:shadow-xl active:translate-y-[0px]">
+                                            Execute Request
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Response -->
+                                <div class="flex flex-col gap-4">
+                                    <div class="flex items-center justify-between">
+                                        <h3 class="text-xl font-bold text-slate-900 dark:text-white">Response</h3>
+                                        <div class="flex items-center gap-2">
+                                            <span id="responseStatus" class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                                Not executed
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="code-container overflow-hidden rounded-xl border border-slate-700/50 shadow-2xl">
+                                        <div class="flex items-center justify-between border-b border-slate-700 bg-slate-800/50 px-4 py-2">
+                                            <div class="flex gap-1.5">
+                                                <div class="size-2.5 rounded-full bg-slate-600"></div>
+                                                <div class="size-2.5 rounded-full bg-slate-600"></div>
+                                                <div class="size-2.5 rounded-full bg-slate-600"></div>
+                                            </div>
+                                            <span class="text-[11px] font-bold uppercase tracking-widest text-slate-500">Result</span>
+                                            <button id="copyResponseBtn" class="text-slate-400 hover:text-white">
+                                                <span class="material-symbols-outlined text-[18px]">content_copy</span>
+                                            </button>
+                                        </div>
+                                        <div id="responseContent" class="flex h-[300px] items-center justify-center p-6 text-center">
+                                            <div class="space-y-2">
+                                                <span class="material-symbols-outlined text-4xl text-slate-600">terminal</span>
+                                                <p class="text-sm text-slate-500">Execute the request to see the response payload here.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Possible Responses -->
+                    <div class="mt-12 pt-8 border-t border-dashed border-slate-200 dark:border-slate-800">
+                        <h3 class="mb-4 text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Possible Responses</h3>
+                        <div class="overflow-hidden rounded-lg border border-slate-100 bg-white dark:border-slate-800 dark:bg-transparent">
+                            <table class="w-full text-left text-sm">
+                                <thead>
+                                    <tr class="border-b border-slate-100 dark:border-slate-800">
+                                        <th class="px-4 py-2.5 font-semibold text-slate-500 dark:text-slate-400 w-24">Code</th>
+                                        <th class="px-4 py-2.5 font-semibold text-slate-500 dark:text-slate-400">Description</th>
+                                        <th class="px-4 py-2.5 text-right font-semibold text-slate-500 dark:text-slate-400 w-32">Schema</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="responsesTable" class="divide-y divide-slate-50 dark:divide-slate-800/50 text-xs">
+                                    <tr>
+                                        <td class="px-4 py-2">
+                                            <span class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 font-mono font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/20">201</span>
+                                        </td>
+                                        <td class="px-4 py-2 text-slate-600 dark:text-slate-400">Player created successfully</td>
+                                        <td class="px-4 py-2 text-right"><a class="text-slate-400 hover:text-primary transition-colors" href="#">Player</a></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2">
+                                            <span class="inline-flex items-center rounded-md bg-amber-50 px-2 py-1 font-mono font-bold text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-400/10 dark:text-amber-400 dark:ring-amber-400/20">400</span>
+                                        </td>
+                                        <td class="px-4 py-2 text-slate-600 dark:text-slate-400">Invalid request data</td>
+                                        <td class="px-4 py-2 text-right"><a class="text-slate-400 hover:text-primary transition-colors" href="#">Error</a></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2">
+                                            <span class="inline-flex items-center rounded-md bg-rose-50 px-2 py-1 font-mono font-bold text-rose-700 ring-1 ring-inset ring-rose-600/20 dark:bg-rose-400/10 dark:text-rose-400 dark:ring-rose-400/20">401</span>
+                                        </td>
+                                        <td class="px-4 py-2 text-slate-600 dark:text-slate-400">Unauthorized</td>
+                                        <td class="px-4 py-2 text-right"><a class="text-slate-400 hover:text-primary transition-colors" href="#">Error</a></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2">
+                                            <span class="inline-flex items-center rounded-md bg-rose-50 px-2 py-1 font-mono font-bold text-rose-700 ring-1 ring-inset ring-rose-600/20 dark:bg-rose-400/10 dark:text-rose-400 dark:ring-rose-400/20">403</span>
+                                        </td>
+                                        <td class="px-4 py-2 text-slate-600 dark:text-slate-400">Forbidden - Admin or Creator access required</td>
+                                        <td class="px-4 py-2 text-right"><a class="text-slate-400 hover:text-primary transition-colors" href="#">Error</a></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // Endpoint definitions based on swagger docs
+        const endpoints = {
+            signup: {
+                method: 'POST',
+                path: '/auth/signup',
+                category: 'Authentication',
+                title: 'Sign Up',
+                description: 'Register a new user with email and password. Role defaults to USER if not specified.',
+                requestBody: `{
+  "email": "user@example.com",
+  "password": "securePassword123",
+  "role": "USER"
+}`,
+                responses: [
+                    { code: '201', description: 'User registered successfully', schema: 'AuthResponse' },
+                    { code: '400', description: 'Invalid request data or email already exists', schema: 'Error' }
+                ],
+                requiresAuth: false
+            },
+            login: {
+                method: 'POST',
+                path: '/auth/login',
+                category: 'Authentication',
+                title: 'Login',
+                description: 'Login with email and password to receive a JWT token for authentication.',
+                requestBody: `{
+  "email": "user@example.com",
+  "password": "securePassword123"
+}`,
+                responses: [
+                    { code: '200', description: 'Login successful', schema: 'AuthResponse' },
+                    { code: '401', description: 'Invalid email or password', schema: 'Error' }
+                ],
+                requiresAuth: false
+            },
+            getUsers: {
+                method: 'GET',
+                path: '/users',
+                category: 'Users',
+                title: 'Get All Users',
+                description: 'Retrieve all users. Only accessible by ADMIN users.',
+                requestBody: null,
+                responses: [
+                    { code: '200', description: 'List of users retrieved successfully', schema: 'User[]' },
+                    { code: '401', description: 'Unauthorized - Invalid or missing token', schema: 'Error' },
+                    { code: '403', description: 'Forbidden - Admin access required', schema: 'Error' }
+                ],
+                requiresAuth: true
+            },
+            updateUserRole: {
+                method: 'PATCH',
+                path: '/users/{id}/role',
+                category: 'Users',
+                title: 'Update User Role',
+                description: 'Update a user\'s role. Only accessible by ADMIN users. Replace {id} with the user ID.',
+                requestBody: `{
+  "role": "SCORER"
+}`,
+                responses: [
+                    { code: '200', description: 'User role updated successfully', schema: 'User' },
+                    { code: '400', description: 'Invalid request data', schema: 'Error' },
+                    { code: '401', description: 'Unauthorized - Invalid or missing token', schema: 'Error' },
+                    { code: '403', description: 'Forbidden - Admin access required', schema: 'Error' },
+                    { code: '404', description: 'User not found', schema: 'Error' }
+                ],
+                requiresAuth: true
+            },
+            createPlayer: {
+                method: 'POST',
+                path: '/players',
+                category: 'Players',
+                title: 'Create Player',
+                description: 'Create a new player. Requires ADMIN or CREATOR role.',
+                requestBody: `{
+  "name": "Virat Kohli"
+}`,
+                responses: [
+                    { code: '201', description: 'Player created successfully', schema: 'Player' },
+                    { code: '400', description: 'Invalid request data', schema: 'Error' },
+                    { code: '401', description: 'Unauthorized', schema: 'Error' },
+                    { code: '403', description: 'Forbidden - Admin or Creator access required', schema: 'Error' }
+                ],
+                requiresAuth: true
+            },
+            getPlayers: {
+                method: 'GET',
+                path: '/players',
+                category: 'Players',
+                title: 'Get All Players',
+                description: 'Retrieve all players. Requires authentication.',
+                requestBody: null,
+                responses: [
+                    { code: '200', description: 'List of players retrieved successfully', schema: 'Player[]' },
+                    { code: '401', description: 'Unauthorized', schema: 'Error' }
+                ],
+                requiresAuth: true
+            },
+            updatePlayerRole: {
+                method: 'PATCH',
+                path: '/players/{id}/role',
+                category: 'Players',
+                title: 'Update Player Role',
+                description: 'Update a player\'s batting, bowling, and wicket-keeping abilities. Requires ADMIN or CREATOR role. Replace {id} with the player ID.',
+                requestBody: `{
+  "isBatsman": true,
+  "isBowler": false,
+  "isWicketKeeper": false
+}`,
+                responses: [
+                    { code: '200', description: 'Player role updated successfully', schema: 'Player' },
+                    { code: '400', description: 'Invalid request data', schema: 'Error' },
+                    { code: '401', description: 'Unauthorized', schema: 'Error' },
+                    { code: '403', description: 'Forbidden - Admin or Creator access required', schema: 'Error' },
+                    { code: '404', description: 'Player not found', schema: 'Error' }
+                ],
+                requiresAuth: true
+            },
+            createTeam: {
+                method: 'POST',
+                path: '/teams',
+                category: 'Teams',
+                title: 'Create Team',
+                description: 'Create a new team. Requires ADMIN or CREATOR role.',
+                requestBody: `{
+  "name": "Mumbai Indians"
+}`,
+                responses: [
+                    { code: '201', description: 'Team created successfully', schema: 'Team' },
+                    { code: '400', description: 'Invalid request data', schema: 'Error' },
+                    { code: '401', description: 'Unauthorized', schema: 'Error' },
+                    { code: '403', description: 'Forbidden - Admin or Creator access required', schema: 'Error' }
+                ],
+                requiresAuth: true
+            },
+            getTeams: {
+                method: 'GET',
+                path: '/teams',
+                category: 'Teams',
+                title: 'Get All Teams',
+                description: 'Retrieve all teams. Requires authentication. Response is cached.',
+                requestBody: null,
+                responses: [
+                    { code: '200', description: 'List of teams retrieved successfully', schema: 'Team[]' },
+                    { code: '401', description: 'Unauthorized', schema: 'Error' }
+                ],
+                requiresAuth: true
+            },
+            addPlayerToTeam: {
+                method: 'POST',
+                path: '/teams/{teamId}/players/{playerId}',
+                category: 'Teams',
+                title: 'Add Player to Team',
+                description: 'Add a player to a team. Requires ADMIN or CREATOR role. Replace {teamId} and {playerId} with actual IDs.',
+                requestBody: null,
+                responses: [
+                    { code: '200', description: 'Player added to team successfully', schema: 'SuccessResponse' },
+                    { code: '400', description: 'Invalid request data', schema: 'Error' },
+                    { code: '401', description: 'Unauthorized', schema: 'Error' },
+                    { code: '403', description: 'Forbidden - Admin or Creator access required', schema: 'Error' },
+                    { code: '404', description: 'Team or player not found', schema: 'Error' }
+                ],
+                requiresAuth: true
+            },
+            createMatch: {
+                method: 'POST',
+                path: '/matches',
+                category: 'Matches',
+                title: 'Create Match',
+                description: 'Create a new match between two teams. Requires ADMIN or CREATOR role.',
+                requestBody: `{
+  "teamAId": "team-uuid-1",
+  "teamBId": "team-uuid-2",
+  "format": "T20"
+}`,
+                responses: [
+                    { code: '201', description: 'Match created successfully', schema: 'Match' },
+                    { code: '400', description: 'Invalid request data', schema: 'Error' },
+                    { code: '401', description: 'Unauthorized', schema: 'Error' },
+                    { code: '403', description: 'Forbidden - Admin or Creator access required', schema: 'Error' }
+                ],
+                requiresAuth: true
+            },
+            startMatch: {
+                method: 'POST',
+                path: '/matches/{matchId}/start',
+                category: 'Matches',
+                title: 'Start Match',
+                description: 'Start a match and set toss winner. Requires SCORER role. Replace {matchId} with the match ID.',
+                requestBody: `{
+  "tossWonBy": "team-uuid-1",
+  "electedTo": "bat"
+}`,
+                responses: [
+                    { code: '200', description: 'Match started successfully', schema: 'Match' },
+                    { code: '400', description: 'Invalid toss data or match already started', schema: 'Error' },
+                    { code: '401', description: 'Unauthorized', schema: 'Error' },
+                    { code: '403', description: 'Forbidden - Scorer access required', schema: 'Error' },
+                    { code: '404', description: 'Match not found', schema: 'Error' }
+                ],
+                requiresAuth: true
+            },
+            getMatchScore: {
+                method: 'GET',
+                path: '/matches/{matchId}/score',
+                category: 'Matches',
+                title: 'Get Match Score',
+                description: 'Get current match score for all innings. Replace {matchId} with the match ID.',
+                requestBody: null,
+                responses: [
+                    { code: '200', description: 'Match score retrieved successfully', schema: 'Score[]' },
+                    { code: '401', description: 'Unauthorized', schema: 'Error' },
+                    { code: '404', description: 'Match not found', schema: 'Error' }
+                ],
+                requiresAuth: true
+            },
+            addBall: {
+                method: 'POST',
+                path: '/matches/{matchId}/balls',
+                category: 'Scoring',
+                title: 'Add Ball',
+                description: 'Record a ball delivery with runs, extras, and wicket information. Requires SCORER role. Replace {matchId} with the match ID.',
+                requestBody: `{
+  "runs": 4,
+  "isWicket": false,
+  "dismissalType": null,
+  "fielder": null,
+  "extras": 0
+}`,
+                responses: [
+                    { code: '201', description: 'Ball added successfully', schema: 'Ball' },
+                    { code: '400', description: 'Invalid ball data', schema: 'Error' },
+                    { code: '401', description: 'Unauthorized', schema: 'Error' },
+                    { code: '403', description: 'Forbidden - Scorer access required', schema: 'Error' },
+                    { code: '404', description: 'Match not found', schema: 'Error' }
+                ],
+                requiresAuth: true
+            },
+            setOpeners: {
+                method: 'POST',
+                path: '/matches/{matchId}/openers',
+                category: 'Scoring',
+                title: 'Set Openers',
+                description: 'Set opening batsmen for current innings. Requires SCORER role. Replace {matchId} with the match ID.',
+                requestBody: `{
+  "striker": "player-uuid-1",
+  "nonStriker": "player-uuid-2"
+}`,
+                responses: [
+                    { code: '200', description: 'Openers set successfully', schema: 'SuccessResponse' },
+                    { code: '400', description: 'Invalid player IDs or already set', schema: 'Error' },
+                    { code: '401', description: 'Unauthorized', schema: 'Error' },
+                    { code: '403', description: 'Forbidden - Scorer access required', schema: 'Error' },
+                    { code: '404', description: 'Match or players not found', schema: 'Error' }
+                ],
+                requiresAuth: true
+            },
+            setBowler: {
+                method: 'POST',
+                path: '/matches/{matchId}/overs/{overNumber}/bowler',
+                category: 'Scoring',
+                title: 'Set Bowler',
+                description: 'Set bowler for a specific over. Requires SCORER role. Replace {matchId} and {overNumber} with actual values.',
+                requestBody: `{
+  "bowlerId": "player-uuid-1"
+}`,
+                responses: [
+                    { code: '200', description: 'Bowler set successfully', schema: 'SuccessResponse' },
+                    { code: '400', description: 'Invalid bowler ID or over', schema: 'Error' },
+                    { code: '401', description: 'Unauthorized', schema: 'Error' },
+                    { code: '403', description: 'Forbidden - Scorer access required', schema: 'Error' },
+                    { code: '404', description: 'Match or bowler not found', schema: 'Error' }
+                ],
+                requiresAuth: true
+            }
+        };
+
+        let currentEndpoint = 'createPlayer';
+        let authToken = '';
+        let currentServer = 'http://localhost:3000';
+
+        // Load endpoint
+        function loadEndpoint(endpointId) {
+            currentEndpoint = endpointId;
+            const endpoint = endpoints[endpointId];
+            
+            // Update active state in sidebar
+            document.querySelectorAll('#sidebarNav a').forEach(link => {
+                link.classList.remove('bg-primary/5', 'text-primary', 'font-bold', 'ring-1', 'ring-inset', 'ring-primary/10', 'dark:bg-primary/10', 'dark:ring-primary/20');
+                link.classList.add('text-slate-600', 'hover:bg-slate-50', 'hover:text-slate-900', 'dark:text-slate-400', 'dark:hover:bg-slate-800/50', 'font-medium');
+            });
+            const activeLink = document.querySelector(`[data-endpoint="${endpointId}"]`);
+            if (activeLink) {
+                activeLink.classList.remove('text-slate-600', 'hover:bg-slate-50', 'hover:text-slate-900', 'dark:text-slate-400', 'dark:hover:bg-slate-800/50', 'font-medium');
+                activeLink.classList.add('bg-primary/5', 'text-primary', 'font-bold', 'ring-1', 'ring-inset', 'ring-primary/10', 'dark:bg-primary/10', 'dark:ring-primary/20');
+            }
+
+            // Update breadcrumb
+            document.getElementById('breadcrumbCategory').textContent = endpoint.category;
+            document.getElementById('breadcrumbEndpoint').textContent = endpoint.title;
+
+            // Update header
+            document.getElementById('endpointTitle').textContent = endpoint.title;
+            document.getElementById('endpointDescription').textContent = endpoint.description;
+
+            // Update method badge
+            const methodBadge = document.getElementById('methodBadge');
+            const methodColors = {
+                'GET': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                'POST': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                'PATCH': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+                'DELETE': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+            };
+            methodBadge.className = `rounded px-2.5 py-1 text-xs font-black uppercase shadow-sm ${methodColors[endpoint.method]}`;
+            methodBadge.textContent = endpoint.method;
+
+            // Update path
+            document.getElementById('endpointPath').textContent = endpoint.path;
+
+            // Update request body
+            const requestBodySection = document.getElementById('requestBodySection');
+            if (endpoint.requestBody) {
+                requestBodySection.style.display = 'block';
+                document.getElementById('requestBody').value = endpoint.requestBody;
+            } else {
+                requestBodySection.style.display = 'none';
+            }
+
+            // Update responses table
+            const responsesTable = document.getElementById('responsesTable');
+            responsesTable.innerHTML = endpoint.responses.map(resp => {
+                const codeColors = {
+                    '200': 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/20',
+                    '201': 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/20',
+                    '400': 'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-400/10 dark:text-amber-400 dark:ring-amber-400/20',
+                    '401': 'bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-400/10 dark:text-rose-400 dark:ring-rose-400/20',
+                    '403': 'bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-400/10 dark:text-rose-400 dark:ring-rose-400/20',
+                    '404': 'bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-400/10 dark:text-rose-400 dark:ring-rose-400/20'
+                };
+                return `
+                    <tr>
+                        <td class="px-4 py-2">
+                            <span class="inline-flex items-center rounded-md px-2 py-1 font-mono font-bold ring-1 ring-inset ${codeColors[resp.code]}">${resp.code}</span>
+                        </td>
+                        <td class="px-4 py-2 text-slate-600 dark:text-slate-400">${resp.description}</td>
+                        <td class="px-4 py-2 text-right"><a class="text-slate-400 hover:text-primary transition-colors" href="#">${resp.schema}</a></td>
+                    </tr>
+                `;
+            }).join('');
+
+            // Reset response
+            resetResponse();
+        }
+
+        // Reset response display
+        function resetResponse() {
+            document.getElementById('responseStatus').innerHTML = '<span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400">Not executed</span>';
+            document.getElementById('responseContent').innerHTML = `
+                <div class="space-y-2">
+                    <span class="material-symbols-outlined text-4xl text-slate-600">terminal</span>
+                    <p class="text-sm text-slate-500">Execute the request to see the response payload here.</p>
+                </div>
+            `;
+        }
+
+        // Execute request
+        async function executeRequest() {
+            const endpoint = endpoints[currentEndpoint];
+            const executeBtn = document.getElementById('executeBtn');
+            
+            executeBtn.disabled = true;
+            executeBtn.textContent = 'EXECUTING...';
+            
+            try {
+                const url = currentServer + endpoint.path;
+                const options = {
+                    method: endpoint.method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                };
+
+                if (authToken && endpoint.requiresAuth) {
+                    options.headers['Authorization'] = `Bearer ${authToken}`;
+                }
+
+                if (endpoint.requestBody) {
+                    options.body = document.getElementById('requestBody').value;
+                }
+
+                const response = await fetch(url, options);
+                const data = await response.json();
+                
+                // Update response status
+                const statusColors = {
+                    '2': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                    '4': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                    '5': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
+                };
+                const statusClass = statusColors[Math.floor(response.status / 100)] || statusColors['4'];
+                document.getElementById('responseStatus').innerHTML = `
+                    <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${statusClass}">
+                        ${response.status} ${response.statusText}
+                    </span>
+                `;
+
+                // Update response content
+                document.getElementById('responseContent').innerHTML = `
+                    <pre class="text-left text-xs overflow-auto h-[300px] p-6">${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                document.getElementById('responseStatus').innerHTML = `
+                    <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
+                        Error
+                    </span>
+                `;
+                document.getElementById('responseContent').innerHTML = `
+                    <div class="space-y-2 p-6">
+                        <span class="material-symbols-outlined text-4xl text-rose-500">error</span>
+                        <p class="text-sm text-rose-500">${error.message}</p>
+                    </div>
+                `;
+            } finally {
+                executeBtn.disabled = false;
+                executeBtn.textContent = 'EXECUTE REQUEST';
+            }
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            // Load default endpoint
+            loadEndpoint(currentEndpoint);
+
+            // Sidebar navigation
+            document.querySelectorAll('[data-endpoint]').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    loadEndpoint(link.dataset.endpoint);
+                });
+            });
+
+            // Server select
+            document.getElementById('serverSelect').addEventListener('change', (e) => {
+                currentServer = e.target.value;
+            });
+
+            // Auth token
+            document.getElementById('authorizeBtn').addEventListener('click', () => {
+                authToken = document.getElementById('authToken').value;
+                if (authToken) {
+                    alert('Token saved! It will be included in subsequent requests.');
+                }
+            });
+
+            // Toggle token visibility
+            document.getElementById('toggleToken').addEventListener('click', () => {
+                const input = document.getElementById('authToken');
+                const icon = document.querySelector('#toggleToken .material-symbols-outlined');
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.textContent = 'visibility';
+                } else {
+                    input.type = 'password';
+                    icon.textContent = 'visibility_off';
+                }
+            });
+
+            // Execute button
+            document.getElementById('executeBtn').addEventListener('click', executeRequest);
+
+            // Copy buttons
+            document.getElementById('copyRequestBtn').addEventListener('click', () => {
+                const text = document.getElementById('requestBody').value;
+                navigator.clipboard.writeText(text);
+            });
+
+            document.getElementById('copyResponseBtn').addEventListener('click', () => {
+                const text = document.querySelector('#responseContent pre')?.textContent || '';
+                if (text) navigator.clipboard.writeText(text);
+            });
+
+            // Search
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                document.querySelectorAll('[data-endpoint]').forEach(link => {
+                    const text = link.textContent.toLowerCase();
+                    const parent = link.closest('div');
+                    if (text.includes(query) || !query) {
+                        parent.style.display = '';
+                    } else {
+                        parent.style.display = 'none';
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
