@@ -1,4 +1,4 @@
-import { getUsersService, updateUserRoleService } from "./user.service.js";
+import { getUserCountByRoleService, getUsersService, updateUserRoleService } from "./user.service.js";
 export async function updateUserRole(req, res, next) {
     try {
         const userId = req.params.id;
@@ -29,6 +29,20 @@ export async function getUsers(req, res, next) {
         }
         const users = await getUsersService(role);
         res.json(users);
+    }
+    catch (e) {
+        next(e);
+    }
+}
+// count2
+export async function getUserCountByRole(req, res, next) {
+    try {
+        const { role } = req.query;
+        if (!role || !["USER", "SCORER", "ADMIN", "CREATOR"].includes(role)) {
+            return res.status(400).json({ message: "Valid role query parameter required" });
+        }
+        const count = await getUserCountByRoleService(role);
+        res.json({ count });
     }
     catch (e) {
         next(e);

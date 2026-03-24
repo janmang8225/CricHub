@@ -2,7 +2,7 @@
 import { Router } from "express";
 import { authMiddleware } from "../../middlewares/auth.middleware.js";
 import { requireRole } from "../../middlewares/role.middleware.js";
-import { getUsers, updateUserRole } from "./user.controller.js";
+import { getUserCountByRole, getUsers, updateUserRole } from "./user.controller.js";
 
 const router = Router();
 
@@ -14,11 +14,20 @@ router.patch(
   updateUserRole
 );
 
+// change2
+router.get(
+  "/users/count",
+  authMiddleware,
+  requireRole(["ADMIN", "CREATOR"]),
+  getUserCountByRole
+);
+
 router.get(
   "/users",
   authMiddleware,
   requireRole(["ADMIN"]),
   getUsers
 );
+
 
 export default router;

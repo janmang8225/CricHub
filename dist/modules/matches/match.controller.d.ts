@@ -6,5 +6,7 @@ export declare function listMatches(req: Request, res: Response, next: NextFunct
 export declare function getMatch(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>> | undefined>;
 export declare function startMatchController(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>> | undefined>;
 export declare function completeMatchController(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>> | undefined>;
+export declare function getPlayingXI(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>> | undefined>;
 export declare function setPlayingXI(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>> | undefined>;
+export declare function listMyMatches(req: Request, res: Response, next: NextFunction): Promise<void>;
 //# sourceMappingURL=match.controller.d.ts.map

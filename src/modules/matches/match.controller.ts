@@ -1,6 +1,6 @@
 // match.controller.ts
 import type { Request, Response, NextFunction } from "express";
-import { createMatchService, listMatchesService, getMatchService, setPlayingXIService } from "./match.service.js";
+import { createMatchService, listMatchesService, getMatchService, setPlayingXIService, getPlayingXIService, listMyMatchesService } from "./match.service.js";
 import {
   assignScorerService,
   unassignScorerService,
@@ -56,14 +56,22 @@ export async function unassignScorer(
   }
 }
 
+// changw2 (added venue)
 export async function createMatch(req: Request, res: Response, next: NextFunction) {
   try {
-    const { teamAId, teamBId, startTime, maxOvers } = req.body;
+    const { teamAId, teamBId, startTime, maxOvers, venue } = req.body;
     const user = (req as any).user;
+    
     if (!maxOvers || maxOvers <= 0) {
       return res.status(400).json({ message: "Valid maxOvers is required" });
     }
-    const match = await createMatchService(teamAId, teamBId, startTime, maxOvers, user.userId);
+    
+    // Validate venue length if provided
+    if (venue && venue.length > 200) {
+      return res.status(400).json({ message: "Venue name too long (max 200 characters)" });
+    }
+    
+    const match = await createMatchService(teamAId, teamBId, startTime, maxOvers, user.userId, venue);
     res.status(201).json(match);
   } catch (e) {
     next(e);
@@ -141,6 +149,20 @@ export async function completeMatchController(req: Request, res: Response, next:
   }
 }
 
+// change2
+export async function getPlayingXI(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.params.id) {
+      return res.status(400).json({ error: 'match id required' });
+    }
+    const matchId = req.params.id;
+    const playingXI = await getPlayingXIService(matchId);
+    res.json(playingXI);
+  } catch (e) {
+    next(e);
+  }
+}
+
 // change1
 export async function setPlayingXI(req: Request, res: Response, next: NextFunction) {
   try {
@@ -168,6 +190,25 @@ export async function setPlayingXI(req: Request, res: Response, next: NextFuncti
     
     await setPlayingXIService(matchId, teamId, players);
     res.status(201).json({ message: "Playing XI set" });
+  } catch (e) {
+    next(e);
+  }
+}
+
+// change2
+export async function listMyMatches(req: Request, res: Response, next: NextFunction) {
+  try {
+    const user = (req as any).user;
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+
+    const matches = await listMyMatchesService(user.userId, user.role, page, limit);
+
+    res.json({
+      page,
+      limit,
+      data: matches,
+    });
   } catch (e) {
     next(e);
   }

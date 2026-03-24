@@ -52,3 +52,12 @@ export async function getUsersService(role?: UserRole) {
 
   return result.rows;
 }
+
+// change2
+export async function getUserCountByRoleService(role: UserRole) {
+  const result = await db.query(
+    `SELECT COUNT(*) as count FROM users WHERE role = $1`,
+    [role]
+  );
+  return parseInt(result.rows[0].count);
+}

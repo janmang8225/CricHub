@@ -1,12 +1,13 @@
 // match.service.ts
 import db from "../../config/db.js";
 import { emitMatchComplete } from "../../websocket/websocket.emitters.js";
-export async function createMatchService(teamAId, teamBId, startTime, maxOvers, createdBy) {
+// change2 (added venue)
+export async function createMatchService(teamAId, teamBId, startTime, maxOvers, createdBy, venue) {
     const result = await db.query(`
-    INSERT INTO matches (team_a_id, team_b_id, start_time, max_overs, created_by)
-    VALUES ($1, $2, $3, $4, $5)
+    INSERT INTO matches (team_a_id, team_b_id, start_time, max_overs, created_by, venue)
+    VALUES ($1, $2, $3, $4, $5, $6)
     RETURNING *
-    `, [teamAId, teamBId, startTime, maxOvers, createdBy]);
+    `, [teamAId, teamBId, startTime, maxOvers, createdBy, venue || null]);
     return result.rows[0];
 }
 // export async function listMatchesService(page: number, limit: number) {
@@ -234,6 +235,64 @@ export async function completeMatchService(matchId) {
         throw e;
     }
 }
+// change2
+export async function getPlayingXIService(matchId) {
+    const result = await db.query(`SELECT 
+      mxi.team_id,
+      t.name as team_name,
+      mxi.player_id,
+      p.name as player_name,
+      mxi.is_captain,
+      mxi.is_vice_captain,
+      mxi.is_wicket_keeper,
+      mxi.is_substitute,
+      p.is_batsman,
+      p.is_bowler,
+      p.is_wicket_keeper as player_is_keeper
+    FROM match_playing_xi mxi
+    JOIN teams t ON mxi.team_id = t.id
+    JOIN players p ON mxi.player_id = p.id
+    WHERE mxi.match_id = $1
+    ORDER BY mxi.team_id, mxi.is_captain DESC, mxi.is_vice_captain DESC`, [matchId]);
+    if (result.rowCount === 0) {
+        return { teamA: null, teamB: null };
+    }
+    const rows = result.rows;
+    const teamAId = rows[0].team_id;
+    const teamBId = rows.find(r => r.team_id !== teamAId)?.team_id;
+    const teamAPlayers = rows.filter(r => r.team_id === teamAId).map(r => ({
+        id: r.player_id,
+        name: r.player_name,
+        isCaptain: r.is_captain,
+        isViceCaptain: r.is_vice_captain,
+        isWicketKeeper: r.is_wicket_keeper,
+        isSubstitute: r.is_substitute,
+        isBatsman: r.is_batsman,
+        isBowler: r.is_bowler,
+    }));
+    const teamBPlayers = teamBId ? rows.filter(r => r.team_id === teamBId).map(r => ({
+        id: r.player_id,
+        name: r.player_name,
+        isCaptain: r.is_captain,
+        isViceCaptain: r.is_vice_captain,
+        isWicketKeeper: r.is_wicket_keeper,
+        isSubstitute: r.is_substitute,
+        isBatsman: r.is_batsman,
+        isBowler: r.is_bowler,
+    })) : [];
+    return {
+        teamA: {
+            id: teamAId,
+            name: rows[0].team_name,
+            players: teamAPlayers,
+        },
+        teamB: teamBId ? {
+            id: teamBId,
+            name: rows.find(r => r.team_id === teamBId).team_name,
+            players: teamBPlayers,
+        } : null,
+    };
+}
 // change1
 export async function setPlayingXIService(matchId, teamId, players) {
     await db.query("BEGIN");
@@ -281,5 +340,62 @@ export async function setPlayingXIService(matchId, teamId, players) {
         await db.query("ROLLBACK");
         throw e;
     }
+}
+// response format for get-playing-xi
+/*
+{
+  "teamA": {
+    "id": "uuid",
+    "name": "Team A",
+    "players": [
+      {
+        "id": "uuid",
+        "name": "Player Name",
+        "isCaptain": true,
+        "isViceCaptain": false,
+        "isWicketKeeper": false,
+        "isSubstitute": false,
+        "isBatsman": true,
+        "isBowler": false
+      }
+    ]
+  },
+  "teamB": { same }
+}
+*/
+// change2
+export async function listMyMatchesService(userId, role, page, limit) {
+    const offset = (page - 1) * limit;
+    let whereClause = '';
+    let params = [limit, offset];
+    if (role === 'CREATOR') {
+        // CREATOR can only see their own matches
+        whereClause = 'WHERE m.created_by = $3';
+        params.push(userId);
+    }
+    // ADMIN sees all matches (no WHERE clause)
+    const result = await db.query(`SELECT 
+      m.*,
+      -- Team A details
+      ta.id as team_a_id,
+      ta.name as team_a_name,
+      s1.runs as team_a_runs,
+      s1.wickets as team_a_wickets,
+      s1.overs as team_a_overs,
+      -- Team B details
+      tb.id as team_b_id,
+      tb.name as team_b_name,
+      s2.runs as team_b_runs,
+      s2.wickets as team_b_wickets,
+      s2.overs as team_b_overs
+    FROM matches m
+    LEFT JOIN teams ta ON m.team_a_id = ta.id
+    LEFT JOIN teams tb ON m.team_b_id = tb.id
+    LEFT JOIN scores s1 ON m.id = s1.match_id AND s1.team_id = m.team_a_id
+    LEFT JOIN scores s2 ON m.id = s2.match_id AND s2.team_id = m.team_b_id
+    ${whereClause}
+    ORDER BY m.created_at DESC 
+    LIMIT $1 OFFSET $2`, params);
+    return result.rows;
 }
 //# sourceMappingURL=match.service.js.map

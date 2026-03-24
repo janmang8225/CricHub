@@ -1,6 +1,6 @@
 // src/modules/users/user.controller.ts
 import type{ Request, Response, NextFunction } from "express";
-import { getUsersService, updateUserRoleService } from "./user.service.js";
+import { getUserCountByRoleService, getUsersService, updateUserRoleService } from "./user.service.js";
 import type{ UserRole } from "../../types/role.js";
 
 export async function updateUserRole(
@@ -47,6 +47,26 @@ export async function getUsers(
 
     const users = await getUsersService(role);
     res.json(users);
+  } catch (e) {
+    next(e);
+  }
+}
+
+// change2
+export async function getUserCountByRole(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { role } = req.query as { role?: UserRole };
+
+    if (!role || !["USER", "SCORER", "ADMIN", "CREATOR"].includes(role)) {
+      return res.status(400).json({ message: "Valid role query parameter required" });
+    }
+
+    const count = await getUserCountByRoleService(role);
+    res.json({ count });
   } catch (e) {
     next(e);
   }

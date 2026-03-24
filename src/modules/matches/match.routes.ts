@@ -1,7 +1,7 @@
 // match.routes.ts
 import { Router } from "express";
 import { authMiddleware } from "../../middlewares/auth.middleware.js";
-import { createMatch, listMatches, getMatch, setPlayingXI } from "./match.controller.js";
+import { createMatch, listMatches, getMatch, setPlayingXI, getPlayingXI, listMyMatches } from "./match.controller.js";
 import { requireRole } from "../../middlewares/role.middleware.js";
 import {
   assignScorer,
@@ -18,6 +18,9 @@ import { switchInnings } from "../innings/innings.controller.js";
 
 const router = Router();
 
+// change2
+router.get("/my-matches", authMiddleware, requireRole(["ADMIN", "CREATOR"]), authenticatedRateLimiter, listMyMatches);
+
 router.post("/", authMiddleware, requireRole(["ADMIN", "CREATOR"]), authenticatedRateLimiter, createMatch); 
 router.get("/", publicRateLimiter, withCache(5), listMatches);
 
@@ -27,6 +30,9 @@ router.post("/:id/innings/switch", authMiddleware, requireRole(["ADMIN", "SCORER
 
 router.patch("/:id/scorers/:userId/deactivate", authMiddleware, requireRole(["ADMIN", "CREATOR"]),authenticatedRateLimiter, unassignScorer);
 router.get("/:id", publicRateLimiter, withCache(5), getMatch);
+
+// change2
+router.get("/:id/playing-xi", publicRateLimiter, withCache(5), getPlayingXI);
 
 // change1
 router.post("/:id/playing-xi", authMiddleware, requireRole(["ADMIN", "CREATOR"]), authenticatedRateLimiter, setPlayingXI);
