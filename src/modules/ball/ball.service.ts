@@ -1101,27 +1101,166 @@ export async function submitBallService(matchId: any, actor: any, ball: any) {
     );
 
     // Get updated stats for WebSocket broadcast
-    const strikerStatsRes = await db.query(
-      `SELECT runs, balls, fours, sixes FROM match_batting_stats
-       WHERE match_id=$1 AND player_id=$2`,
-      [matchId, ball.strikerId]
+    // const strikerStatsRes = await db.query(
+    //   `SELECT runs, balls, fours, sixes FROM match_batting_stats
+    //    WHERE match_id=$1 AND player_id=$2`,
+    //   [matchId, ball.strikerId]
+    // );
+    // const nonStrikerStatsRes = await db.query(
+    //   `SELECT runs, balls, fours, sixes FROM match_batting_stats
+    //    WHERE match_id=$1 AND player_id=$2`,
+    //   [matchId, ball.nonStrikerId]
+    // );
+
+    // change2 (fix for above - get updated stats)
+    // const latestStateRes = await db.query(
+    //   `SELECT striker_id, non_striker_id
+    //   FROM batting_state
+    //   WHERE match_id=$1 AND innings=$2`,
+    //   [matchId, currentInnings]
+    // );
+
+    // const latestStrikerId = latestStateRes.rows[0].striker_id;
+    // const latestNonStrikerId = latestStateRes.rows[0].non_striker_id;
+    // const strikerStatsRes = await db.query(
+    //   `SELECT runs, balls, fours, sixes FROM match_batting_stats
+    //   WHERE match_id=$1 AND player_id=$2`,
+    //   [matchId, latestStrikerId]
+    // );
+    // const nonStrikerStatsRes = await db.query(
+    //   `SELECT runs, balls, fours, sixes FROM match_batting_stats
+    //   WHERE match_id=$1 AND player_id=$2`,
+    //   [matchId, latestNonStrikerId]
+    // );
+
+    // // bowler stats (same as prev; not above)
+    // const bowlerStatsRes = await db.query(
+    //   `SELECT balls, runs_conceded, wickets FROM match_bowling_stats
+    //    WHERE match_id=$1 AND player_id=$2`,
+    //   [matchId, ball.bowlerId]
+    // );
+
+    // const strikerStats = strikerStatsRes.rows[0];
+    // const nonStrikerStats = nonStrikerStatsRes.rows[0];
+    // const bowlerStats = bowlerStatsRes.rows[0];
+
+
+    // change2 - better than previous
+    const latestStateRes = await db.query(
+      `SELECT striker_id, non_striker_id
+      FROM batting_state
+      WHERE match_id=$1 AND innings=$2`,
+      [matchId, currentInnings]
     );
-    const nonStrikerStatsRes = await db.query(
-      `SELECT runs, balls, fours, sixes FROM match_batting_stats
-       WHERE match_id=$1 AND player_id=$2`,
-      [matchId, ball.nonStrikerId]
-    );
+
+    const latestStrikerId = latestStateRes.rows[0]?.striker_id ?? null;
+    const latestNonStrikerId = latestStateRes.rows[0]?.non_striker_id ?? null;
+
+    const strikerStatsRes = latestStrikerId
+      ? await db.query(
+          `SELECT runs, balls, fours, sixes
+          FROM match_batting_stats
+          WHERE match_id=$1 AND player_id=$2`,
+          [matchId, latestStrikerId]
+        )
+      : { rows: [] };
+
+    const nonStrikerStatsRes = latestNonStrikerId
+      ? await db.query(
+          `SELECT runs, balls, fours, sixes
+          FROM match_batting_stats
+          WHERE match_id=$1 AND player_id=$2`,
+          [matchId, latestNonStrikerId]
+        )
+      : { rows: [] };
+
     const bowlerStatsRes = await db.query(
-      `SELECT balls, runs_conceded, wickets FROM match_bowling_stats
-       WHERE match_id=$1 AND player_id=$2`,
+      `SELECT balls, runs_conceded, wickets
+      FROM match_bowling_stats
+      WHERE match_id=$1 AND player_id=$2`,
       [matchId, ball.bowlerId]
     );
 
-    const strikerStats = strikerStatsRes.rows[0];
-    const nonStrikerStats = nonStrikerStatsRes.rows[0];
-    const bowlerStats = bowlerStatsRes.rows[0];
+    const strikerStats = strikerStatsRes.rows[0] ?? {
+      runs: 0,
+      balls: 0,
+      fours: 0,
+      sixes: 0,
+    };
 
+    const nonStrikerStats = nonStrikerStatsRes.rows[0] ?? {
+      runs: 0,
+      balls: 0,
+      fours: 0,
+      sixes: 0,
+    };
+
+    const bowlerStats = bowlerStatsRes.rows[0] ?? {
+      balls: 0,
+      runs_conceded: 0,
+      wickets: 0,
+    };
+
+    
     // Emit score update
+    // emitScoreUpdate(
+    //   matchId,
+    //   battingTeamId,
+    //   currentScore.runs,
+    //   currentScore.wickets,
+    //   oversDecimal,
+    //   {
+    //     id: ball.strikerId,
+    //     runs: strikerStats.runs,
+    //     balls: strikerStats.balls,
+    //     fours: strikerStats.fours,
+    //     sixes: strikerStats.sixes,
+    //   },
+    //   {
+    //     id: ball.nonStrikerId,
+    //     runs: nonStrikerStats.runs,
+    //     balls: nonStrikerStats.balls,
+    //     fours: nonStrikerStats.fours,
+    //     sixes: nonStrikerStats.sixes,
+    //   },
+    //   {
+    //     id: ball.bowlerId,
+    //     balls: bowlerStats.balls,
+    //     runsConceded: bowlerStats.runs_conceded,
+    //     wickets: bowlerStats.wickets,
+    //   }
+    // );
+
+    // change2 - updated-emit
+    // emitScoreUpdate(
+    //   matchId,
+    //   battingTeamId,
+    //   currentScore.runs,
+    //   currentScore.wickets,
+    //   oversDecimal,
+    //   {
+    //     id: latestStrikerId,
+    //     runs: strikerStatsRes.rows[0].runs,
+    //     balls: strikerStatsRes.rows[0].balls,
+    //     fours: strikerStatsRes.rows[0].fours,
+    //     sixes: strikerStatsRes.rows[0].sixes,
+    //   },
+    //   {
+    //     id: latestNonStrikerId,
+    //     runs: nonStrikerStatsRes.rows[0].runs,
+    //     balls: nonStrikerStatsRes.rows[0].balls,
+    //     fours: nonStrikerStatsRes.rows[0].fours,
+    //     sixes: nonStrikerStatsRes.rows[0].sixes,
+    //   },
+    //   {
+    //     id: ball.bowlerId,
+    //     balls: bowlerStats.balls,
+    //     runsConceded: bowlerStats.runs_conceded,
+    //     wickets: bowlerStats.wickets,
+    //   }
+    // );
+
+    // change2 - new
     emitScoreUpdate(
       matchId,
       battingTeamId,
@@ -1129,14 +1268,14 @@ export async function submitBallService(matchId: any, actor: any, ball: any) {
       currentScore.wickets,
       oversDecimal,
       {
-        id: ball.strikerId,
+        id: latestStrikerId,
         runs: strikerStats.runs,
         balls: strikerStats.balls,
         fours: strikerStats.fours,
         sixes: strikerStats.sixes,
       },
       {
-        id: ball.nonStrikerId,
+        id: latestNonStrikerId,
         runs: nonStrikerStats.runs,
         balls: nonStrikerStats.balls,
         fours: nonStrikerStats.fours,
@@ -1239,7 +1378,16 @@ export async function submitBallService(matchId: any, actor: any, ball: any) {
     }
 
 
-
+    // log - (temporary: only to debug)
+    console.log(striker_id)
+    console.log(strikerStats)
+    // console.log(strikerStatsRes)
+    console.log()
+    console.log(non_striker_id)
+    console.log(nonStrikerStats)
+    // console.log(nonStrikerStatsRes)
+    console.log("- - - - -")
+    console.log()
 
 
     return {

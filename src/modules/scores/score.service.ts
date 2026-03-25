@@ -278,7 +278,8 @@ export async function getBattingStateService(matchId: string) {
 
   let strikerId: string | null = null;
   let nonStrikerId: string | null = null;
-  let currentOver = 0;
+  // let currentOver = 0;
+  let currentOver = 1;
   let nextBall = 1;
 
   if (lastBallRes.rowCount === 0) {
@@ -313,7 +314,8 @@ export async function getBattingStateService(matchId: string) {
 
     if (nextBall > 6) {
       nextBall = 1;
-      currentOver += 1;
+      // currentOver += 1;
+      currentOver = last.over + 1;
       // end of over → swap
       [strikerId, nonStrikerId] = [nonStrikerId, strikerId];
     }

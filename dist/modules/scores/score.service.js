@@ -188,7 +188,8 @@ export async function getBattingStateService(matchId) {
     `, [matchId, innings]);
     let strikerId = null;
     let nonStrikerId = null;
-    let currentOver = 0;
+    // let currentOver = 0;
+    let currentOver = 1;
     let nextBall = 1;
     if (lastBallRes.rowCount === 0) {
         /* -------- Opening batsmen -------- */
@@ -217,7 +218,8 @@ export async function getBattingStateService(matchId) {
         nextBall = last.ball + 1;
         if (nextBall > 6) {
             nextBall = 1;
-            currentOver += 1;
+            // currentOver += 1;
+            currentOver = last.over + 1;
             // end of over → swap
             [strikerId, nonStrikerId] = [nonStrikerId, strikerId];
         }

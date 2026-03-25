@@ -34,7 +34,7 @@ export async function getUsers(req, res, next) {
         next(e);
     }
 }
-// count2
+// change2
 export async function getUserCountByRole(req, res, next) {
     try {
         const { role } = req.query;
